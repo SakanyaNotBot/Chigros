@@ -234,6 +234,7 @@ public final class PecChartParser {
 
             JudgeLine jl = new JudgeLine();
             jl.bpm = baseBpm;
+            jl.bpmfactor = 1.0;
             jl.invertRotation = false;
 
             if (b.speedPoints.isEmpty()) {

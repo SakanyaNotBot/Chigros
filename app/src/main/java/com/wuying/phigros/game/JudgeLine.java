@@ -13,6 +13,8 @@ public class JudgeLine {
     public transient BpmTimeline bpmTimeline;
     public double bpm;
 
+    public double bpmfactor = 1.0;
+
     /** Optional RPE event layers. Move/rotate/alpha are summed across layers. */
     public List<EventLayer> eventLayers;
 

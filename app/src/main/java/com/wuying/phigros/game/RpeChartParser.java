@@ -394,11 +394,11 @@ public final class RpeChartParser {
 
         double bpmFactor = getAsDouble(lineObj, 1.0, "bpmfactor", "bpmFactor", "BPMFactor");
         if (!Double.isFinite(bpmFactor) || bpmFactor <= 0.0) bpmFactor = 1.0;
-        double lineBpm = bpmConv.baseBpm() * bpmFactor;
-        if (!Double.isFinite(lineBpm) || lineBpm <= 0.0) lineBpm = bpmConv.baseBpm();
+        double lineBpm = bpmConv.baseBpm();
 
         JudgeLine line = new JudgeLine();
-        line.bpm = lineBpm;
+        line.bpm = lineBpm / bpmFactor;
+        line.bpmfactor = bpmFactor;
         line.bpmTimeline = timeline;
         line.invertRotation = false;
 
