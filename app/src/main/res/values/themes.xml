@@ -1,0 +1,23 @@
+<resources>
+
+    <style name="Theme.JSRhythmDemo" parent="Theme.MaterialComponents.DayNight.DarkActionBar">
+        <item name="android:windowFullscreen">true</item>
+        <item name="colorPrimary">@color/primary_color</item>
+        <item name="colorPrimaryVariant">@color/dark_primary_color</item>
+        <item name="colorSecondary">@color/accent_color</item>
+        <item name="colorSecondaryVariant">@color/accent_color</item>
+        <item name="colorOnPrimary">@color/text_icons</item>
+        <item name="colorOnSecondary">@color/primary_text</item>
+    </style>
+
+    <style name="Theme.JSRhythmDemo.NoActionBar" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <item name="android:windowFullscreen">true</item>
+        <item name="colorPrimary">@color/primary_color</item>
+        <item name="colorPrimaryVariant">@color/dark_primary_color</item>
+        <item name="colorSecondary">@color/accent_color</item>
+        <item name="colorSecondaryVariant">@color/accent_color</item>
+        <item name="colorOnPrimary">@color/text_icons</item>
+        <item name="colorOnSecondary">@color/primary_text</item>
+    </style>
+
+</resources>

@@ -1,0 +1,13 @@
+<resources>
+    <color name="dark_primary_color">#1976D2</color>
+    <color name="light_primary_color">#BBDEFB</color>
+    <color name="primary_color">#2196F3</color>
+    <color name="accent_color">#FFC107</color>
+
+    <color name="text_icons">#FFFFFF</color>
+    <color name="primary_text">#212121</color>
+    <color name="secondary_text">#757575</color>
+    <color name="divider_color">#BDBDBD</color>
+    <color name="disabled_surface">#BDBDBD</color>
+</resources>
+

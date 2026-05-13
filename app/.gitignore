@@ -1,0 +1,12 @@
+# Signing config — contains passwords
+keystore.properties
+keystore/
+
+# Build outputs
+build/
+.cxx/
+
+# Claude Code (local state)
+.claude/settings.local.json
+.claude/scheduled_tasks.json
+.claude/scheduled_tasks.lock
