@@ -5179,6 +5179,7 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
         // isJudged=false:
         //   delta >= -goodTimeRange → wait (protection mechanism)
         //   delta < -goodTimeRange → Miss
+        java.util.Set<Note> holdHeadSpawned = new java.util.HashSet<>();
         try {
         for (int i = judgeCursor; i < nSize; i++) {
             Note note = notes.get(i);
@@ -5268,7 +5269,9 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
                         note.clicked = true;
                         note.holdTapTimeMs = System.nanoTime() / 1_000_000L;
                         note.holdBroken = false;
-                        spawnHoldHeadHitEffect(note, tChart, GameConstants.PCOLOR[0], GameConstants.PCOLOR[1], GameConstants.PCOLOR[2], GameConstants.PALPHA, 4);
+                        if (holdHeadSpawned.add(note)) {
+                            spawnHoldHeadHitEffect(note, tChart, GameConstants.PCOLOR[0], GameConstants.PCOLOR[1], GameConstants.PCOLOR[2], GameConstants.PALPHA, 4);
+                        }
                     }
                     note.statOffset = deltaTime;
                 } else if (absDt <= limitGood) {
@@ -5293,7 +5296,9 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
                         note.clicked = true;
                         note.holdTapTimeMs = System.nanoTime() / 1_000_000L;
                         note.holdBroken = false;
-                        spawnHoldHeadHitEffect(note, tChart, GameConstants.GCOLOR[0], GameConstants.GCOLOR[1], GameConstants.GCOLOR[2], GameConstants.GALPHA, 3);
+                        if (holdHeadSpawned.add(note)) {
+                            spawnHoldHeadHitEffect(note, tChart, GameConstants.GCOLOR[0], GameConstants.GCOLOR[1], GameConstants.GCOLOR[2], GameConstants.GALPHA, 3);
+                        }
                     }
                     note.statOffset = deltaTime;
                 } else if (note.type != GameConstants.NOTE_HOLD && absDt <= limitBad) {
