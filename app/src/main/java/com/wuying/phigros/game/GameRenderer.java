@@ -5228,7 +5228,11 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
                         JudgeLine masterLine0 = note.master;
                         double bpm0 = (masterLine0 != null && masterLine0.bpm > 0) ? masterLine0.bpm : 120.0;
                         double interval0 = (HOLD_PARTICLE_INTERVAL_BEATS * 60.0 / bpm0) / Math.max(0.001f, musicSpeed);
-                        note.holdFxAtSec = tChart + interval0;
+                        // Only schedule body effects if, after the first interval
+                        // delay, at least one more full interval remains.
+                        note.holdFxAtSec = (note.holdEndTime - tChart >= 2 * interval0)
+                                ? tChart + interval0
+                                : Double.POSITIVE_INFINITY;
                         note.clicked = true;
                         note.holdTapTimeMs = System.nanoTime() / 1_000_000L;
                         note.holdBroken = false;
@@ -5251,7 +5255,9 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
                         JudgeLine masterLine0 = note.master;
                         double bpm0 = (masterLine0 != null && masterLine0.bpm > 0) ? masterLine0.bpm : 120.0;
                         double interval0 = (HOLD_PARTICLE_INTERVAL_BEATS * 60.0 / bpm0) / Math.max(0.001f, musicSpeed);
-                        note.holdFxAtSec = tChart + interval0;
+                        note.holdFxAtSec = (note.holdEndTime - tChart >= 2 * interval0)
+                                ? tChart + interval0
+                                : Double.POSITIVE_INFINITY;
                         note.clicked = true;
                         note.holdTapTimeMs = System.nanoTime() / 1_000_000L;
                         note.holdBroken = false;
@@ -5305,7 +5311,7 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
             if (!Double.isFinite(n.holdFxAtSec)) n.holdFxAtSec = tChart + interval;
 
             while (tChart >= n.holdFxAtSec) {
-                if (n.holdFxAtSec <= n.holdEndTime) {
+                if (n.holdFxAtSec + interval <= n.holdEndTime) {
                     if (n.holdPerfect) {
                         spawnHitEffect(n, n.holdFxAtSec, GameConstants.PCOLOR[0], GameConstants.PCOLOR[1], GameConstants.PCOLOR[2], GameConstants.PALPHA, 4);
                     } else {
@@ -5318,6 +5324,23 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
             // Hold tail pre-judge
             if ((n.holdEndTime - tChart) / spd <= limitBad) {
                 n.holdPreJudge = true;
+            }
+
+            // When the hold is about to be finalized (within early-settle window),
+            // spawn remaining body effects up to holdEndTime so the tail is visually
+            // covered — matching AUTOPLAY's pre-generated ClickEffectItems that span
+            // the full hold duration. Holds shorter than one particle interval are
+            // skipped (holdFxAtSec was set to +Inf in Phase 5).
+            if (n.holdPreJudge && Double.isFinite(n.holdFxAtSec)
+                    && tChart >= n.holdEndTime - HOLD_TAIL_EARLY_SETTLE) {
+                while (n.holdFxAtSec + interval <= n.holdEndTime) {
+                    if (n.holdPerfect) {
+                        spawnHitEffect(n, n.holdFxAtSec, GameConstants.PCOLOR[0], GameConstants.PCOLOR[1], GameConstants.PCOLOR[2], GameConstants.PALPHA, 4);
+                    } else {
+                        spawnHitEffect(n, n.holdFxAtSec, GameConstants.GCOLOR[0], GameConstants.GCOLOR[1], GameConstants.GCOLOR[2], GameConstants.GALPHA, 3);
+                    }
+                    n.holdFxAtSec += interval;
+                }
             }
         }
         } catch (Throwable t) { /* prevent crash */ }
