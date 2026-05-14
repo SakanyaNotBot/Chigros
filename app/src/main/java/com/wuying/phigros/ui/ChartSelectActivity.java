@@ -383,7 +383,7 @@ public class ChartSelectActivity extends AppCompatActivity {
     }
 
     public void launchPickZip() {
-        pickZipLauncher.launch(new String[]{"application/zip", "application/x-zip-compressed", "application/octet-stream"});
+        pickZipLauncher.launch(new String[]{"application/zip", "application/x-zip-compressed", "application/octet-stream", "*/*"});
     }
 
     public void launchPickMusic() {

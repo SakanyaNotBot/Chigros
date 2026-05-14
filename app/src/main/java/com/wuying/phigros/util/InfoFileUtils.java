@@ -77,6 +77,7 @@ public final class InfoFileUtils {
                 info.level = getStr(meta, "level", "Level");
                 info.difficulty = getStr(meta, "difficulty", "Difficulty", "diff", "Diff");
                 info.illustration = getStr(meta, "background", "Background", "bg", "Bg", "illustration", "Illustration", "image", "Image", "picture", "Picture");
+                info.music = getStr(meta, "music", "Music", "song", "Song", "audio", "Audio");
             }
         } catch (Exception ignored) {
         }
