@@ -50,6 +50,7 @@ public class Note {
     public transient double judgeDiffSec = 0.0;
     public transient double judgeTimeSec = Double.NaN;
     public transient boolean preJudge = false;
+    public transient boolean dragPrimed = false;
     public transient boolean holdActive = false;
     public transient boolean holdPerfect = false;
     public transient boolean holdPreJudge = false;

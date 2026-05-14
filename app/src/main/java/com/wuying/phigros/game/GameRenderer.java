@@ -515,7 +515,7 @@ public class GameRenderer implements GLSurfaceView.Renderer {
     private static final double WINC_GOOD = 0.090;
     private static final double WINC_BAD = 0.140;
     private double challengeTimeSum = 0.0;
-    private static final int TIME_SUM_FRAMES = 10;
+    private static final int TIME_SUM_FRAMES = 5;
     private final double[] timeSumBuffer = new double[TIME_SUM_FRAMES];
     private int timeSumBufferIndex = 0;
     private int timeSumBufferCount = 0;
@@ -975,6 +975,7 @@ public class GameRenderer implements GLSurfaceView.Renderer {
             n.judgeDiffSec = 0.0;
             n.judgeTimeSec = Double.NaN;
             n.preJudge = false;
+            n.dragPrimed = false;
             n.isJudged = false;
             n.holdActive = false;
             n.holdPerfect = false;
@@ -1287,8 +1288,8 @@ public class GameRenderer implements GLSurfaceView.Renderer {
                 // Phigros: Hold head Miss threshold = goodTimeRange
                 return getGoodWindowSec();
             default: // NOTE_TAP
-                // Phigros: ClickControl — delta < -goodTimeRange → Miss for unjudged Tap
-                return getGoodWindowSec();
+                // Phigros: ClickControl — delta < -badTimeRange → Miss for unjudged Tap
+                return getBadWindowSec();
         }
     }
 
@@ -4995,14 +4996,19 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
             // Drag preventBad (style Drag protection):
             // When a Drag hasn't reached the judgment line yet (deltaTime > 0),
             // mark nearby type-1 (click) judge events as preventBad.
-            // This prevents those taps from causing Bad judgments on Tap/Hold notes,
+            // This prevents those taps from causing Bad judgments on Tap notes,
             // because Drag only has Perfect/Miss — the tap is "absorbed" by the Drag.
+            // Challenge mode: preventBad time window and spatial threshold halved.
             if (deltaTime > 0) {
-                for (JudgeEvent je : judgeList) {
-                    if (je.type != 1) continue;
-                    float touchPos = getPhigrosTouchPos(je.offsetX, je.offsetY, note, tChart, stageAspect);
-                    if (touchPos < 2.1f) {
-                        je.preventBad = true;
+                float preventBadSpatial = challengeMode ? 1.05f : 2.1f;
+                double preventBadTimeLimit = challengeMode ? limitBad * 0.5 : limitBad;
+                if (deltaTime < preventBadTimeLimit) {
+                    for (JudgeEvent je : judgeList) {
+                        if (je.type != 1) continue;
+                        float touchPos = getPhigrosTouchPos(je.offsetX, je.offsetY, note, tChart, stageAspect);
+                        if (touchPos < preventBadSpatial) {
+                            je.preventBad = true;
+                        }
                     }
                 }
             }
@@ -5018,6 +5024,7 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
                     float touchPos = getPhigrosTouchPos(je.offsetX, je.offsetY, note, tChart, stageAspect);
                     if (touchPos < 2.1f) {
                         note.preJudge = true;
+                        note.dragPrimed = true;
                         break;
                     }
                 }
@@ -5066,13 +5073,18 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
             // Flick preventBad (style Flick protection):
             // When a Flick hasn't reached the judgment line (deltaTime > 0) or
             // hasn't been pre-judged yet (!preJudge), mark nearby type-1 (click)
-            // judge events as preventBad to prevent Bad on Tap/Hold notes.
+            // judge events as preventBad to prevent Bad on Tap notes.
+            // Challenge mode: preventBad time window and spatial threshold halved.
             if (deltaTime > 0 || !note.preJudge) {
-                for (JudgeEvent je : judgeList) {
-                    if (je.type != 1) continue;
-                    float touchPos = getPhigrosTouchPos(je.offsetX, je.offsetY, note, tChart, stageAspect);
-                    if (touchPos < 2.1f) {
-                        je.preventBad = true;
+                float preventBadSpatial = challengeMode ? 1.05f : 2.1f;
+                double preventBadTimeLimit = challengeMode ? limitBad * 0.5 : limitBad;
+                if (!challengeMode || deltaTime < preventBadTimeLimit) {
+                    for (JudgeEvent je : judgeList) {
+                        if (je.type != 1) continue;
+                        float touchPos = getPhigrosTouchPos(je.offsetX, je.offsetY, note, tChart, stageAspect);
+                        if (touchPos < preventBadSpatial) {
+                            je.preventBad = true;
+                        }
                     }
                 }
             }
@@ -5172,6 +5184,26 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
             Note note = notes.get(i);
             if (note == null || note.isFake || note.judgeResult >= 0) continue;
             if (note.sect > horizon) break;
+
+            // Drag primed settlement: sticky prejudge for tap-on-drag support.
+            // Once a drag is primed by any touch, it stays primed and gets
+            // Perfect when deltaTime < 0.005 (note at the judgment line).
+            if (note.dragPrimed && note.type == GameConstants.NOTE_DRAG) {
+                double dt = note.sect - tChart;
+                if (dt < 0.005) {
+                    NativeAudioEngine.triggerSfx(GameConstants.NOTE_DRAG);
+                    spawnHitEffect(note, tChart, GameConstants.PCOLOR[0], GameConstants.PCOLOR[1], GameConstants.PCOLOR[2], GameConstants.PALPHA, 4);
+                    commitJudgement(note, JR_PERFECT, 0.0);
+                    continue;
+                }
+                if (dt < -DRAG_MISS_THRESHOLD) {
+                    commitJudgement(note, JR_MISS, 0.25);
+                    continue;
+                }
+                // Drag is primed but not yet at the line — wait
+                continue;
+            }
+
             if (note.type != GameConstants.NOTE_TAP && note.type != GameConstants.NOTE_HOLD) continue;
 
             double deltaTime = note.sect - tChart;
@@ -5212,7 +5244,7 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
             // Phigros: ClickControl settlement based on note.isJudged from CheckNote
             if (note.isJudged) {
                 double absDt = Math.abs(deltaTime);
-                if (absDt < limitPerfect) {
+                if (absDt <= limitPerfect) {
                     // Perfect
                     NativeAudioEngine.triggerSfx(GameConstants.NOTE_TAP);
                     if (note.type == GameConstants.NOTE_TAP) {
@@ -5239,7 +5271,7 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
                         spawnHoldHeadHitEffect(note, tChart, GameConstants.PCOLOR[0], GameConstants.PCOLOR[1], GameConstants.PCOLOR[2], GameConstants.PALPHA, 4);
                     }
                     note.statOffset = deltaTime;
-                } else if (absDt < limitGood) {
+                } else if (absDt <= limitGood) {
                     // Good
                     NativeAudioEngine.triggerSfx(GameConstants.NOTE_TAP);
                     if (note.type == GameConstants.NOTE_TAP) {
@@ -5264,7 +5296,7 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
                         spawnHoldHeadHitEffect(note, tChart, GameConstants.GCOLOR[0], GameConstants.GCOLOR[1], GameConstants.GCOLOR[2], GameConstants.GALPHA, 3);
                     }
                     note.statOffset = deltaTime;
-                } else if (note.type != GameConstants.NOTE_HOLD && absDt < limitBad) {
+                } else if (note.type != GameConstants.NOTE_HOLD && absDt <= limitBad) {
                     // Bad — Tap only; Hold has no Bad judgment (no hit SFX on Bad)
                     // Drag/Flick preventBad: if the tap that selected this note was
                     // "absorbed" by an approaching Drag/Flick, skip Bad and revoke
@@ -5281,14 +5313,17 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
                 } else if (note.type == GameConstants.NOTE_HOLD) {
                     // Hold: |delta| >= goodTimeRange → revoke activation, wait for a better touch
                     note.isJudged = false;
+                } else if (note.type == GameConstants.NOTE_TAP) {
+                    // Tap: |delta| > badTimeRange (shouldn't happen via CheckNote, but safety net)
+                    commitJudgement(note, JR_MISS, 0.25);
                 }
             }
 
             // Not isJudged: wait if within grace, Miss if too late
             if (!note.isJudged && !note.holdActive && note.judgeResult < 0) {
-                // Phigros: ClickControl — delta < -goodTimeRange → Miss
-                // (note more than goodTimeRange past due without activation)
-                if (deltaTime < -limitGood) {
+                // Phigros: ClickControl — delta < -badTimeRange → Miss
+                // (note more than badTimeRange past due without activation)
+                if (deltaTime < -limitBad) {
                     commitJudgement(note, JR_MISS, 0.25);
                 }
             }
