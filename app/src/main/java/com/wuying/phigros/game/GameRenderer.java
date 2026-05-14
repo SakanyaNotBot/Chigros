@@ -427,6 +427,9 @@ public class GameRenderer implements GLSurfaceView.Renderer {
     private FloatBuffer batchBuffer;
     private int progBatch = 0;
     private int locBatchPos, locBatchUv, locBatchColor, locBatchProj, locBatchTex;
+    // Non-premultiplied hit-fx shader; used with standard alpha blending
+    private int progHitFx = 0;
+    private int locHitFxPos, locHitFxUv, locHitFxColor, locHitFxProj, locHitFxTex;
     private int batchCount = 0;
 
     // Stage-level mirror transform (applied only while drawing chart content)
@@ -1456,6 +1459,14 @@ public class GameRenderer implements GLSurfaceView.Renderer {
         locBatchColor = GLES20.glGetAttribLocation(progBatch, "aColor");
         locBatchProj = GLES20.glGetUniformLocation(progBatch, "uProjection");
         locBatchTex = GLES20.glGetUniformLocation(progBatch, "uTexture");
+
+        // hit-fx program (non-premultiplied output for standard alpha blending)
+        progHitFx = buildProgram(VS_BATCH, FS_HITFX);
+        locHitFxPos = GLES20.glGetAttribLocation(progHitFx, "aPosition");
+        locHitFxUv = GLES20.glGetAttribLocation(progHitFx, "aTexCoord");
+        locHitFxColor = GLES20.glGetAttribLocation(progHitFx, "aColor");
+        locHitFxProj = GLES20.glGetUniformLocation(progHitFx, "uProjection");
+        locHitFxTex = GLES20.glGetUniformLocation(progHitFx, "uTexture");
 
         // batch buffer (6 vertices per quad for TRIANGLES)
         ByteBuffer bbb = ByteBuffer.allocateDirect(MAX_BATCH_QUADS * 6 * VERTEX_SIZE * 4);
@@ -5848,6 +5859,48 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
         batchBuffer.position(0);
     }
 
+    /** Flush batched quads using the non-premultiplied hit-fx shader and
+     *  standard alpha blending. Caller must set the blend mode before calling. */
+    private void flushHitFxBatch(Texture tex) {
+        if (batchCount == 0 || tex == null) {
+            batchCount = 0;
+            if (batchBuffer != null) batchBuffer.position(0);
+            return;
+        }
+
+        GLES20.glUseProgram(progHitFx);
+        if (inStageSpace && mirrorX) {
+            Matrix.multiplyMM(tmpBatchProj, 0, proj, 0, stagePreTransform, 0);
+            GLES20.glUniformMatrix4fv(locHitFxProj, 1, false, tmpBatchProj, 0);
+        } else {
+            GLES20.glUniformMatrix4fv(locHitFxProj, 1, false, proj, 0);
+        }
+        GLES20.glActiveTexture(GLES20.GL_TEXTURE0);
+        GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, tex.id);
+        GLES20.glUniform1i(locHitFxTex, 0);
+
+        batchBuffer.position(0);
+        GLES20.glEnableVertexAttribArray(locHitFxPos);
+        GLES20.glVertexAttribPointer(locHitFxPos, 2, GLES20.GL_FLOAT, false, VERTEX_SIZE * 4, batchBuffer);
+
+        batchBuffer.position(2);
+        GLES20.glEnableVertexAttribArray(locHitFxUv);
+        GLES20.glVertexAttribPointer(locHitFxUv, 2, GLES20.GL_FLOAT, false, VERTEX_SIZE * 4, batchBuffer);
+
+        batchBuffer.position(4);
+        GLES20.glEnableVertexAttribArray(locHitFxColor);
+        GLES20.glVertexAttribPointer(locHitFxColor, 4, GLES20.GL_FLOAT, false, VERTEX_SIZE * 4, batchBuffer);
+
+        GLES20.glDrawArrays(GLES20.GL_TRIANGLES, 0, batchCount * 6);
+
+        GLES20.glDisableVertexAttribArray(locHitFxPos);
+        GLES20.glDisableVertexAttribArray(locHitFxUv);
+        GLES20.glDisableVertexAttribArray(locHitFxColor);
+
+        batchCount = 0;
+        batchBuffer.position(0);
+    }
+
     private void drawClickEffects(double tChart) {
         if (texHitFx == null || texWhite == null) return;
         if (respack == null || respack.hitFx == null || respack.hitFx.length < 2) return;
@@ -5879,7 +5932,10 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
             }
         }
 
-        // 1. Batch hit animations
+        // 1. Spritesheet — standard alpha blend with non-premultiplied shader
+        GLES20.glBlendFuncSeparate(
+                GLES20.GL_SRC_ALPHA, GLES20.GL_ONE_MINUS_SRC_ALPHA,
+                GLES20.GL_ONE, GLES20.GL_ONE_MINUS_SRC_ALPHA);
         for (int i = clickEffectIndex; i < eff.size(); i++) {
             ClickEffectItem item = eff.get(i);
             if (item.timeSec > tChart) break;
@@ -5931,10 +5987,14 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
             addQuadToBatch(x, y, effectSize, effectSize, 0f,
                     GameConstants.PCOLOR[0], GameConstants.PCOLOR[1], GameConstants.PCOLOR[2], GameConstants.PALPHA,
                     u0, v0, u1, v1);
-            
-            if (batchCount >= MAX_BATCH_QUADS) flushBatch(texHitFx);
+
+            if (batchCount >= MAX_BATCH_QUADS) flushHitFxBatch(texHitFx);
         }
-        flushBatch(texHitFx);
+        flushHitFxBatch(texHitFx);
+        // Restore premultiplied-alpha blending
+        GLES20.glBlendFuncSeparate(
+                GLES20.GL_ONE, GLES20.GL_ONE_MINUS_SRC_ALPHA,
+                GLES20.GL_ONE, GLES20.GL_ONE_MINUS_SRC_ALPHA);
 
         // 2. Batch particles
         float s = stageW / 4040f * 3f;
@@ -6036,6 +6096,10 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
         }
         if (hitEffects.isEmpty()) return;
 
+        // 1. Spritesheet — standard alpha blend with non-premultiplied shader
+        GLES20.glBlendFuncSeparate(
+                GLES20.GL_SRC_ALPHA, GLES20.GL_ONE_MINUS_SRC_ALPHA,
+                GLES20.GL_ONE, GLES20.GL_ONE_MINUS_SRC_ALPHA);
         for (int i = 0; i < hitEffects.size(); i++) {
             HitEffect item = hitEffects.get(i);
             if (item.timeSec + dur < tVis) continue;
@@ -6057,10 +6121,14 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
             addQuadToBatch(item.x, item.y, effectSize, effectSize, 0f,
                     item.r, item.g, item.b, item.a,
                     u0, v0, u1, v1);
-            if (batchCount >= MAX_BATCH_QUADS) flushBatch(texHitFx);
+            if (batchCount >= MAX_BATCH_QUADS) flushHitFxBatch(texHitFx);
         }
-        flushBatch(texHitFx);
+        flushHitFxBatch(texHitFx);
+        GLES20.glBlendFuncSeparate(
+                GLES20.GL_ONE, GLES20.GL_ONE_MINUS_SRC_ALPHA,
+                GLES20.GL_ONE, GLES20.GL_ONE_MINUS_SRC_ALPHA);
 
+        // 2. Particle debris
         float s = stageW / 4040f * 3f;
         float baseSize = s * 30f;
         for (int i = 0; i < hitEffects.size(); i++) {
@@ -7441,5 +7509,15 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
             "  outC.a = tex.a * vColor.a;\n" +
             "  outC.rgb = tex.rgb * vColor.rgb * vColor.a;\n" +
             "  gl_FragColor = outC;\n" +
+            "}\n";
+
+    private static final String FS_HITFX =
+            "precision mediump float;\n" +
+            "uniform sampler2D uTexture;\n" +
+            "varying vec2 vTex;\n" +
+            "varying vec4 vColor;\n" +
+            "void main(){\n" +
+            "  float maskAlpha = texture2D(uTexture, vTex).a;\n" +
+            "  gl_FragColor = vec4(vColor.rgb, maskAlpha * vColor.a);\n" +
             "}\n";
 }
