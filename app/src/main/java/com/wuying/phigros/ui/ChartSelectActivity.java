@@ -29,6 +29,7 @@ import com.wuying.phigros.util.ZipPackUtils;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.List;
 
 public class ChartSelectActivity extends AppCompatActivity {
 
@@ -89,6 +90,7 @@ public class ChartSelectActivity extends AppCompatActivity {
     private ActivityResultLauncher<String[]> pickChartLauncher;
     private ActivityResultLauncher<String[]> pickBgLauncher;
     private ActivityResultLauncher<String[]> pickZipLauncher;
+    private ActivityResultLauncher<String[]> pickSkinLauncher;
 
     private ExtendedFloatingActionButton fabStart;
     private MaterialToolbar toolbar;
@@ -267,6 +269,19 @@ public class ChartSelectActivity extends AppCompatActivity {
             tryUpdateSongInfo();
             notifyChartTabFilesChanged();
         });
+
+        pickSkinLauncher = registerForActivityResult(new ActivityResultContracts.OpenDocument(), uri -> {
+            if (uri == null) return;
+            tryTakePersistableRead(uri);
+            try {
+                File zipFile = FileUtils.copyUriToCache(this, uri, "skin_zip");
+                SkinManager.importSkin(this, zipFile);
+                toast("皮肤导入成功");
+                notifyVideoTabSkinChanged();
+            } catch (IOException e) {
+                toast("导入皮肤失败：" + e.getMessage());
+            }
+        });
     }
 
     private void tryTakePersistableRead(Uri uri) {
@@ -368,6 +383,18 @@ public class ChartSelectActivity extends AppCompatActivity {
         it.putExtra(PlayActivity.EXTRA_AUTOPLAY, autoplay);
         it.putExtra(PlayActivity.EXTRA_CHALLENGE, challengeMode);
 
+        int skinIdx = SkinManager.getSelectedSkinIndex(this);
+        List<SkinManager.SkinEntry> skinEntries = SkinManager.getSkinList(this);
+        if (skinIdx > 0 && skinIdx < skinEntries.size()) {
+            SkinManager.SkinEntry entry = skinEntries.get(skinIdx);
+            if (!entry.isBuiltin()) {
+                File skinDir = SkinManager.getSkinDir(this, entry.id);
+                if (skinDir != null && skinDir.isDirectory()) {
+                    it.putExtra(PlayActivity.EXTRA_SKIN_PATH, skinDir.getAbsolutePath());
+                }
+            }
+        }
+
         startActivity(it);
     }
 
@@ -396,6 +423,28 @@ public class ChartSelectActivity extends AppCompatActivity {
 
     public void launchPickBg() {
         pickBgLauncher.launch(new String[]{"image/*"});
+    }
+
+    public void launchPickSkin() {
+        pickSkinLauncher.launch(new String[]{"application/zip", "application/x-zip-compressed", "application/octet-stream", "*/*"});
+    }
+
+    public int getSelectedSkinIndex() {
+        return SkinManager.getSelectedSkinIndex(this);
+    }
+
+    public void setSelectedSkinIndex(int index) {
+        SkinManager.setSelectedSkinIndex(this, index);
+    }
+
+    private void notifyVideoTabSkinChanged() {
+        try {
+            androidx.fragment.app.Fragment f = getSupportFragmentManager().findFragmentByTag("f1");
+            if (f instanceof SelectVideoFragment) {
+                ((SelectVideoFragment) f).onResume();
+            }
+        } catch (Exception ignored) {
+        }
     }
 
     public File getMusicFile()           { return musicFile; }

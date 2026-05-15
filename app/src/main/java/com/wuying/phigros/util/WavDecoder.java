@@ -5,6 +5,8 @@ import android.content.Context;
 import androidx.annotation.NonNull;
 
 import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
@@ -23,6 +25,15 @@ public final class WavDecoder {
     @NonNull
     public static PcmDecoder.DecodedAudio decodeRawWavToFloatPcm(@NonNull Context ctx, int resId) throws IOException {
         byte[] bytes = readAll(ctx.getResources().openRawResource(resId));
+        return decodeWavBytes(bytes);
+    }
+
+    @NonNull
+    public static PcmDecoder.DecodedAudio decodeWavFileToFloatPcm(@NonNull File file) throws IOException {
+        byte[] bytes;
+        try (FileInputStream fis = new FileInputStream(file)) {
+            bytes = readAll(fis);
+        }
         return decodeWavBytes(bytes);
     }
 

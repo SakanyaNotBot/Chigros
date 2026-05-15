@@ -25,6 +25,7 @@ import com.fasterxml.jackson.annotation.PropertyAccessor;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.ByteArrayOutputStream;
@@ -251,6 +252,13 @@ public class GameRenderer implements GLSurfaceView.Renderer {
     private final boolean showFps;
     private final boolean showDebugInfo;
 
+    @Nullable
+    private final String skinPath;
+    @Nullable
+    private SkinConfig skinConfig;
+    private final float[] skinPColor = {GameConstants.PCOLOR_R, GameConstants.PCOLOR_G, GameConstants.PCOLOR_B};
+    private final float[] skinGColor = {GameConstants.GCOLOR_R, GameConstants.GCOLOR_G, GameConstants.GCOLOR_B};
+
     // intro: animation (1.2s) + hold (0.2s) before music/chart starts.
     // During the animation, a fake judge line extends from center to full width.
     // During the hold, the fake line stays at full width, then real lines appear.
@@ -354,6 +362,8 @@ public class GameRenderer implements GLSurfaceView.Renderer {
     private Texture[][] noteHeadTex = new Texture[5][2]; // [type][morebets]
     private Texture texHold;   // hold.png
     private Texture texHoldMh; // hold_mh.png
+    private Texture texHoldBody;   // hold_body.png (for holdRepeat mode)
+    private Texture texHoldBodyMh; // hold_body_mh.png
     private Texture texHitFx;  // hit_fx.png (atlas)
     private Texture texWhite;  // 1x1 white
 
@@ -585,6 +595,7 @@ public class GameRenderer implements GLSurfaceView.Renderer {
                         boolean challengeMode,
                         boolean showFps,
                         boolean showDebugInfo,
+                        @Nullable String skinPath,
                         @Nullable Callback callback) {
         this.context = context.getApplicationContext();
         this.chart = chart;
@@ -607,6 +618,7 @@ public class GameRenderer implements GLSurfaceView.Renderer {
         this.challengeMode = challengeMode;
         this.showFps = showFps;
         this.showDebugInfo = showDebugInfo;
+        this.skinPath = skinPath;
         this.callback = callback;
 
         // HUD font (used for score/combo/song/diff text rendered in GL).
@@ -1366,11 +1378,11 @@ public class GameRenderer implements GLSurfaceView.Renderer {
             // should NOT add another effect
             if (jr == JR_PERFECT) {
                 if (n.type != GameConstants.NOTE_DRAG && n.type != GameConstants.NOTE_FLICK && n.type != GameConstants.NOTE_HOLD) {
-                    spawnHitEffect(n, frameChartTimeSec, GameConstants.PCOLOR[0], GameConstants.PCOLOR[1], GameConstants.PCOLOR[2], GameConstants.PALPHA, 4);
+                    spawnHitEffect(n, frameChartTimeSec, skinPColor[0], skinPColor[1], skinPColor[2], GameConstants.PALPHA, 4);
                 }
             } else if (jr == JR_GOOD) {
                 if (n.type != GameConstants.NOTE_DRAG && n.type != GameConstants.NOTE_FLICK && n.type != GameConstants.NOTE_HOLD) {
-                    spawnHitEffect(n, frameChartTimeSec, GameConstants.GCOLOR[0], GameConstants.GCOLOR[1], GameConstants.GCOLOR[2], GameConstants.GALPHA, 3);
+                    spawnHitEffect(n, frameChartTimeSec, skinGColor[0], skinGColor[1], skinGColor[2], GameConstants.GALPHA, 3);
                 }
             } else if (jr == JR_BAD) {
                 // Bad: tint note and fade out (no hit effect on line)
@@ -1485,6 +1497,19 @@ public class GameRenderer implements GLSurfaceView.Renderer {
             respack.hitFx = new int[]{4, 4};
         }
 
+        // Load skin config and override respack if available
+        skinConfig = null;
+        if (skinPath != null && !skinPath.isEmpty()) {
+            skinConfig = com.wuying.phigros.ui.SkinManager.loadSkinConfig(new File(skinPath));
+            if (skinConfig != null) {
+                if (skinConfig.holdAtlas != null) respack.holdAtlas = skinConfig.holdAtlas;
+                if (skinConfig.holdAtlasMH != null) respack.holdAtlasMH = skinConfig.holdAtlasMH;
+                if (skinConfig.hitFx != null) respack.hitFx = skinConfig.hitFx;
+                parseSkinColor(skinConfig.colorPerfect, skinPColor);
+                parseSkinColor(skinConfig.colorGood, skinGColor);
+            }
+        }
+
         // Load textures (assets)
         texPause = loadTextureFromAssetsSafe("res/pause.png");
         // Pause menu icons: force to white (preserve alpha)
@@ -1493,23 +1518,27 @@ public class GameRenderer implements GLSurfaceView.Renderer {
         texContinue = loadTextureFromAssetsSafe("res/continue.png", true);
         texTimerLine = loadTextureFromAssetsSafe("res/timerLine.png");
 
-        noteHeadTex[GameConstants.NOTE_TAP][0] = loadTextureFromAssetsSafe("res/click.png");
-        noteHeadTex[GameConstants.NOTE_TAP][1] = loadTextureFromAssetsSafe("res/click_mh.png");
-        noteHeadTex[GameConstants.NOTE_DRAG][0] = loadTextureFromAssetsSafe("res/drag.png");
-        noteHeadTex[GameConstants.NOTE_DRAG][1] = loadTextureFromAssetsSafe("res/drag_mh.png");
-        noteHeadTex[GameConstants.NOTE_FLICK][0] = loadTextureFromAssetsSafe("res/flick.png");
-        noteHeadTex[GameConstants.NOTE_FLICK][1] = loadTextureFromAssetsSafe("res/flick_mh.png");
+        noteHeadTex[GameConstants.NOTE_TAP][0] = loadSkinTexture("click.png", "res/click.png");
+        noteHeadTex[GameConstants.NOTE_TAP][1] = loadSkinTexture("click_mh.png", "res/click_mh.png");
+        noteHeadTex[GameConstants.NOTE_DRAG][0] = loadSkinTexture("drag.png", "res/drag.png");
+        noteHeadTex[GameConstants.NOTE_DRAG][1] = loadSkinTexture("drag_mh.png", "res/drag_mh.png");
+        noteHeadTex[GameConstants.NOTE_FLICK][0] = loadSkinTexture("flick.png", "res/flick.png");
+        noteHeadTex[GameConstants.NOTE_FLICK][1] = loadSkinTexture("flick_mh.png", "res/flick_mh.png");
 
         // hold atlas texture
-        texHold = loadTextureFromAssetsSafe("res/hold.png");
-        texHoldMh = loadTextureFromAssetsSafe("res/hold_mh.png");
+        texHold = loadSkinTexture("hold.png", "res/hold.png");
+        texHoldMh = loadSkinTexture("hold_mh.png", "res/hold_mh.png");
 
         // Assign hold textures to noteHeadTex for width calculation
         noteHeadTex[GameConstants.NOTE_HOLD][0] = texHold;
         noteHeadTex[GameConstants.NOTE_HOLD][1] = texHoldMh;
 
         // hit fx
-        texHitFx = loadTextureFromAssetsSafe("res/hit_fx.png");
+        texHitFx = loadSkinTexture("hit_fx.png", "res/hit_fx.png");
+
+        // hold body textures (for holdRepeat mode)
+        texHoldBody = loadSkinTexture("hold_body.png", null);
+        texHoldBodyMh = loadSkinTexture("hold_body_mh.png", null);
 
         // background from file
         if (texBackground != null) {
@@ -2865,15 +2894,23 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
                         // [head, body, end] rendered in that order (head behind body,
                         // body behind end). Match this order: head → body → tail.
                         if (!reverseHoldLocked) {
-                        // --- Head (for future holds, before the head reaches the judge line) ---
+                        // --- Head ---
                         // hold container layout (head above body):
                         // head center at judgmentPoint + headH/2
                         // body start  at judgmentPoint
                         // Shift both head and body down by 0.4 * headH to match, keeping them adjacent:
                         // head center at visualFp - 0.4 * headH
                         // body start  at visualFp + 0.1 * headH
-                        if (!holdHeadPassedLine) {
-                            float headCenterFp = visualFp - noteHeadH * 0.4f;
+                        boolean keepHead = skinConfig != null && skinConfig.holdKeepHead;
+                        boolean holdCompact = skinConfig != null && skinConfig.holdCompact;
+                        float headOffset = holdCompact ? 0.15f : 0.4f;
+                        if (!holdHeadPassedLine || keepHead) {
+                            float headCenterFp;
+                            if (holdHeadPassedLine && keepHead) {
+                                headCenterFp = transYPx - noteHeadH * headOffset;
+                            } else {
+                                headCenterFp = visualFp - noteHeadH * headOffset;
+                            }
                             // Clamp: keep at least half the head visible above the judge line.
                             float headDrawFp = Math.max(-noteHeadH * 0.5f, headCenterFp);
                             float headX = noteAtX + headDrawFp * dirX;
@@ -2890,9 +2927,8 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
                             // Body extends to meet the shifted tail (tail shifted +tailH).
                             bodyEndFp = drawTailFp;
                         } else {
-                            // body starts at visualFp + 0.1*headH, adjacent below the head.
-                            // Head bottom: (visualFp - 0.4*headH) + headH/2 = visualFp + 0.1*headH ✓
-                            bodyStartFp = visualFp + noteHeadH * 0.1f;
+                            float bodyHeadAdj = (0.5f - headOffset) * noteHeadH;
+                            bodyStartFp = visualFp + bodyHeadAdj;
                             bodyEndFp = drawTailFp;
                         }
 
@@ -2909,6 +2945,33 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
                         float drawLen = drawEndFp - drawStartFp;
 
                         if (drawLen > 0.01f) {
+                            boolean useHoldRepeat = skinConfig != null && skinConfig.holdRepeat;
+                            if (useHoldRepeat) {
+                                float bodyPixelH = holdUv.bodyV1 > holdUv.bodyV0
+                                        ? (holdUv.bodyV1 - holdUv.bodyV0) * (float) holdTex.height
+                                        : 0f;
+                                if (bodyPixelH > 0f && holdTex.width > 0) {
+                                    float bodyTileH = noteWidth * bodyPixelH / (float) holdTex.width;
+                                    if (bodyTileH > 1f) {
+                                        float pos = drawStartFp;
+                                        while (pos < drawEndFp) {
+                                            float remaining = drawEndFp - pos;
+                                            float tileH = Math.min(bodyTileH, remaining);
+                                            float tileVFrac = tileH / bodyTileH;
+                                            float tileV1 = holdUv.bodyV0 + (holdUv.bodyV1 - holdUv.bodyV0) * tileVFrac;
+                                            float tileCenterFp = pos + tileH / 2f;
+                                            float tileX = noteAtX + tileCenterFp * dirX;
+                                            float tileY = noteAtY + tileCenterFp * dirY;
+                                            if (isNoteRectInArea(tileX, tileY, noteWidth, tileH, drawRot, noteCullL, noteCullT, noteCullR, noteCullB)) {
+                                                addQuadToBatch(tileX, tileY, noteWidth, tileH, drawRot, 1f, 1f, 1f, noteAlpha, 0f, holdUv.bodyV0, 1f, tileV1);
+                                            }
+                                            pos += tileH;
+                                            if (batchCount >= MAX_BATCH_QUADS - 3) flushBatch(holdTex);
+                                        }
+                                        continue;
+                                    }
+                                }
+                            }
                             float bodyX = noteAtX + ((drawStartFp + drawEndFp) / 2f) * dirX;
                             float bodyY = noteAtY + ((drawStartFp + drawEndFp) / 2f) * dirY;
                             if (isNoteRectInArea(bodyX, bodyY, noteWidth, drawLen, drawRot, noteCullL, noteCullT, noteCullR, noteCullB)) {
@@ -5034,7 +5097,7 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
             if (note.preJudge && deltaTime < 0.005) {
                 note.preJudge = false;
                 NativeAudioEngine.triggerSfx(GameConstants.NOTE_DRAG);
-                spawnHitEffect(note, tChart, GameConstants.PCOLOR[0], GameConstants.PCOLOR[1], GameConstants.PCOLOR[2], GameConstants.PALPHA, 4);
+                spawnHitEffect(note, tChart, skinPColor[0], skinPColor[1], skinPColor[2], GameConstants.PALPHA, 4);
                 commitJudgement(note, JR_PERFECT, 0.0);
             }
             // Late Miss: v5 < -0.1 && !isJudged → Miss
@@ -5163,7 +5226,7 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
             if (note.preJudge && deltaTime < 0.005) {
                 note.preJudge = false;
                 NativeAudioEngine.triggerSfx(GameConstants.NOTE_FLICK);
-                spawnHitEffect(note, tChart, GameConstants.PCOLOR[0], GameConstants.PCOLOR[1], GameConstants.PCOLOR[2], GameConstants.PALPHA, 4);
+                spawnHitEffect(note, tChart, skinPColor[0], skinPColor[1], skinPColor[2], GameConstants.PALPHA, 4);
                 commitJudgement(note, JR_PERFECT, 0.0);
             }
         }
@@ -5193,7 +5256,7 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
                 double dt = note.sect - tChart;
                 if (dt < 0.005) {
                     NativeAudioEngine.triggerSfx(GameConstants.NOTE_DRAG);
-                    spawnHitEffect(note, tChart, GameConstants.PCOLOR[0], GameConstants.PCOLOR[1], GameConstants.PCOLOR[2], GameConstants.PALPHA, 4);
+                    spawnHitEffect(note, tChart, skinPColor[0], skinPColor[1], skinPColor[2], GameConstants.PALPHA, 4);
                     commitJudgement(note, JR_PERFECT, 0.0);
                     continue;
                 }
@@ -5270,7 +5333,7 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
                         note.holdTapTimeMs = System.nanoTime() / 1_000_000L;
                         note.holdBroken = false;
                         if (holdHeadSpawned.add(note)) {
-                            spawnHoldHeadHitEffect(note, tChart, GameConstants.PCOLOR[0], GameConstants.PCOLOR[1], GameConstants.PCOLOR[2], GameConstants.PALPHA, 4);
+                            spawnHoldHeadHitEffect(note, tChart, skinPColor[0], skinPColor[1], skinPColor[2], GameConstants.PALPHA, 4);
                         }
                     }
                     note.statOffset = deltaTime;
@@ -5297,7 +5360,7 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
                         note.holdTapTimeMs = System.nanoTime() / 1_000_000L;
                         note.holdBroken = false;
                         if (holdHeadSpawned.add(note)) {
-                            spawnHoldHeadHitEffect(note, tChart, GameConstants.GCOLOR[0], GameConstants.GCOLOR[1], GameConstants.GCOLOR[2], GameConstants.GALPHA, 3);
+                            spawnHoldHeadHitEffect(note, tChart, skinGColor[0], skinGColor[1], skinGColor[2], GameConstants.GALPHA, 3);
                         }
                     }
                     note.statOffset = deltaTime;
@@ -5353,9 +5416,9 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
             while (tChart >= n.holdFxAtSec) {
                 if (n.holdFxAtSec + interval <= n.holdEndTime) {
                     if (n.holdPerfect) {
-                        spawnHitEffect(n, n.holdFxAtSec, GameConstants.PCOLOR[0], GameConstants.PCOLOR[1], GameConstants.PCOLOR[2], GameConstants.PALPHA, 4);
+                        spawnHitEffect(n, n.holdFxAtSec, skinPColor[0], skinPColor[1], skinPColor[2], GameConstants.PALPHA, 4);
                     } else {
-                        spawnHitEffect(n, n.holdFxAtSec, GameConstants.GCOLOR[0], GameConstants.GCOLOR[1], GameConstants.GCOLOR[2], GameConstants.GALPHA, 3);
+                        spawnHitEffect(n, n.holdFxAtSec, skinGColor[0], skinGColor[1], skinGColor[2], GameConstants.GALPHA, 3);
                     }
                 }
                 n.holdFxAtSec += interval;
@@ -5375,9 +5438,9 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
                     && tChart >= n.holdEndTime - HOLD_TAIL_EARLY_SETTLE) {
                 while (n.holdFxAtSec + interval <= n.holdEndTime) {
                     if (n.holdPerfect) {
-                        spawnHitEffect(n, n.holdFxAtSec, GameConstants.PCOLOR[0], GameConstants.PCOLOR[1], GameConstants.PCOLOR[2], GameConstants.PALPHA, 4);
+                        spawnHitEffect(n, n.holdFxAtSec, skinPColor[0], skinPColor[1], skinPColor[2], GameConstants.PALPHA, 4);
                     } else {
-                        spawnHitEffect(n, n.holdFxAtSec, GameConstants.GCOLOR[0], GameConstants.GCOLOR[1], GameConstants.GCOLOR[2], GameConstants.GALPHA, 3);
+                        spawnHitEffect(n, n.holdFxAtSec, skinGColor[0], skinGColor[1], skinGColor[2], GameConstants.GALPHA, 3);
                     }
                     n.holdFxAtSec += interval;
                 }
@@ -6048,7 +6111,7 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
             }
 
             addQuadToBatch(x, y, effectSize, effectSize, 0f,
-                    GameConstants.PCOLOR[0], GameConstants.PCOLOR[1], GameConstants.PCOLOR[2], GameConstants.PALPHA,
+                    skinPColor[0], skinPColor[1], skinPColor[2], GameConstants.PALPHA,
                     u0, v0, u1, v1);
 
             if (batchCount >= MAX_BATCH_QUADS) flushHitFxBatch(texHitFx);
@@ -6090,7 +6153,7 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
                 float ry = y + (float) (r * Math.sin(prad));
                 
                 addQuadToBatch(rx, ry, size, size, 0f,
-                        GameConstants.PCOLOR[0], GameConstants.PCOLOR[1], GameConstants.PCOLOR[2], alpha,
+                        skinPColor[0], skinPColor[1], skinPColor[2], alpha,
                         0f, 0f, 1f, 1f);
                 
                 if (batchCount >= MAX_BATCH_QUADS) flushBatch(texWhite);
@@ -6144,10 +6207,11 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
         int rows = Math.max(1, respack.hitFx[1]);
         int frames = cols * rows;
 
-        final double dur = 0.5;
+        final double dur = (skinConfig != null && skinConfig.hitFxDuration > 0f) ? skinConfig.hitFxDuration : 0.5;
         final double tVis = visualTimeSec;
         float noteWidth = stageW * 0.1234375f * keyScale;
-        float effectSize = noteWidth * 1.375f * 1.12f;
+        float fxScale = (skinConfig != null && skinConfig.hitFxScale > 0f) ? skinConfig.hitFxScale : 1.0f;
+        float effectSize = noteWidth * 1.375f * 1.12f * fxScale;
 
         while (!hitEffects.isEmpty()) {
             HitEffect e = hitEffects.get(0);
@@ -6192,30 +6256,33 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
                 GLES20.GL_ONE, GLES20.GL_ONE_MINUS_SRC_ALPHA);
 
         // 2. Particle debris
-        float s = stageW / 4040f * 3f;
-        float baseSize = s * 30f;
-        for (int i = 0; i < hitEffects.size(); i++) {
-            HitEffect item = hitEffects.get(i);
-            if (item.timeSec + dur < tVis) continue;
+        boolean hideParticles = skinConfig != null && skinConfig.hideParticles;
+        if (!hideParticles) {
+            float s = stageW / 4040f * 3f;
+            float baseSize = s * 30f;
+            for (int i = 0; i < hitEffects.size(); i++) {
+                HitEffect item = hitEffects.get(i);
+                if (item.timeSec + dur < tVis) continue;
 
-            float p = (float) ((tVis - item.timeSec) / dur);
-            p = MathUtils.clamp(p, 0f, 1f);
-            float k = 9f * p / (8f * p + 1f);
-            float alpha = 1f - p;
-            float size = baseSize * (((0.2078f * p - 1.6524f) * p + 1.6399f) * p + 0.4988f);
+                float p = (float) ((tVis - item.timeSec) / dur);
+                p = MathUtils.clamp(p, 0f, 1f);
+                float k = 9f * p / (8f * p + 1f);
+                float alpha = 1f - p;
+                float size = baseSize * (((0.2078f * p - 1.6524f) * p + 1.6399f) * p + 0.4988f);
 
-            for (int pi = 0; pi < item.numOfParts; pi++) {
-                float rr = s * item.effectRBase[pi] * k;
-                double prad = item.effectRotateDeg[pi] * Math.PI / 180.0;
-                float rx = item.x + (float) (rr * Math.cos(prad));
-                float ry = item.y + (float) (rr * Math.sin(prad));
-                addQuadToBatch(rx, ry, size, size, 0f,
-                        item.r, item.g, item.b, alpha,
-                        0f, 0f, 1f, 1f);
-                if (batchCount >= MAX_BATCH_QUADS) flushBatch(texWhite);
+                for (int pi = 0; pi < item.numOfParts; pi++) {
+                    float rr = s * item.effectRBase[pi] * k;
+                    double prad = item.effectRotateDeg[pi] * Math.PI / 180.0;
+                    float rx = item.x + (float) (rr * Math.cos(prad));
+                    float ry = item.y + (float) (rr * Math.sin(prad));
+                    addQuadToBatch(rx, ry, size, size, 0f,
+                            item.r, item.g, item.b, alpha,
+                            0f, 0f, 1f, 1f);
+                    if (batchCount >= MAX_BATCH_QUADS) flushBatch(texWhite);
+                }
             }
+            flushBatch(texWhite);
         }
-        flushBatch(texWhite);
     }
 
 
@@ -7348,6 +7415,31 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
         } catch (IOException e) {
             return null;
         }
+    }
+
+    private static void parseSkinColor(String hex, float[] out) {
+        if (hex == null || hex.isEmpty()) return;
+        String s = hex.trim();
+        if (s.startsWith("0x") || s.startsWith("0X")) s = s.substring(2);
+        if (s.length() < 6) return;
+        try {
+            long v = Long.parseLong(s, 16);
+            out[0] = ((v >> 16) & 0xFF) / 255f;
+            out[1] = ((v >> 8) & 0xFF) / 255f;
+            out[2] = (v & 0xFF) / 255f;
+        } catch (NumberFormatException ignored) {}
+    }
+
+    private Texture loadSkinTexture(String fileName, String assetFallback) {
+        if (skinPath != null && !skinPath.isEmpty()) {
+            String filePath = skinPath + "/" + fileName;
+            Texture t = loadTextureFromFileSafe(filePath);
+            if (t != null) return t;
+        }
+        if (assetFallback != null) {
+            return loadTextureFromAssetsSafe(assetFallback);
+        }
+        return null;
     }
 
     private static FloatBuffer createQuadPos() {

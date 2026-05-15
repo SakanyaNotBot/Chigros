@@ -35,6 +35,7 @@ import com.wuying.phigros.game.PlayResult;
 import com.wuying.phigros.util.PcmDecoder;
 import com.wuying.phigros.util.WavDecoder;
 
+import java.io.File;
 import java.io.IOException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -63,6 +64,7 @@ public class PlayActivity extends AppCompatActivity implements GameRenderer.Call
     public static final String EXTRA_APFC = "extra_apfc";
     public static final String EXTRA_AUTOPLAY = "extra_autoplay";
     public static final String EXTRA_CHALLENGE = "extra_challenge";
+    public static final String EXTRA_SKIN_PATH = "extra_skin_path";
 
     private String musicPath;
     private String chartPath;
@@ -86,6 +88,8 @@ public class PlayActivity extends AppCompatActivity implements GameRenderer.Call
     private boolean apfcIndicator = false;
     private boolean autoplay = false;
     private boolean challengeMode = false;
+
+    private String skinPath;
 
     private ExecutorService loaderExecutor;
     private GameGLSurfaceView glView;
@@ -140,6 +144,7 @@ public class PlayActivity extends AppCompatActivity implements GameRenderer.Call
         apfcIndicator = getIntent().getBooleanExtra(EXTRA_APFC, false);
         autoplay = getIntent().getBooleanExtra(EXTRA_AUTOPLAY, false);
         challengeMode = getIntent().getBooleanExtra(EXTRA_CHALLENGE, false);
+        skinPath = getIntent().getStringExtra(EXTRA_SKIN_PATH);
 
         if (musicSpeed <= 0f) musicSpeed = 1.0f;
         musicSpeed = Math.max(0.5f, Math.min(musicSpeed, 2.0f));
@@ -251,6 +256,10 @@ public class PlayActivity extends AppCompatActivity implements GameRenderer.Call
             tryLoadSfxRawWav(GameConstants.NOTE_DRAG, R.raw.drag);
             tryLoadSfxRawWav(GameConstants.NOTE_FLICK, R.raw.flick);
 
+            if (skinPath != null && !skinPath.isEmpty()) {
+                tryLoadSfxFromSkinDir(skinPath);
+            }
+
             NativeAudioEngine.prepareDefaultSfxIfMissing();
 
             float userOffsetSec = chartOffsetMs / 1000.0f;
@@ -259,7 +268,8 @@ public class PlayActivity extends AppCompatActivity implements GameRenderer.Call
                     totalTimeSec, aspectRatio, keyScale, scrollSpeed,
                     mirrorX, musicSpeed, userOffsetSec, backgroundDim,
                     lowResMode, multiPressHighlight, apfcIndicator,
-                    autoplay, challengeMode, showFps, showDebugInfo, this);
+                    autoplay, challengeMode, showFps, showDebugInfo,
+                    skinPath, this);
 
             runOnUiThread(() -> {
                 glView = new GameGLSurfaceView(this);
@@ -544,6 +554,35 @@ public class PlayActivity extends AppCompatActivity implements GameRenderer.Call
         } catch (Throwable ignored) {}
     }
 
+    private static final String[] SFX_EXTENSIONS = {".wav", ".ogg", ".mp3"};
+
+    private void tryLoadSfxFromSkinDir(String skinDirPath) {
+        File skinDir = new File(skinDirPath);
+        if (!skinDir.isDirectory()) return;
+        tryLoadSfxFromSkinFile("click", GameConstants.NOTE_TAP, skinDir);
+        tryLoadSfxFromSkinFile("drag", GameConstants.NOTE_DRAG, skinDir);
+        tryLoadSfxFromSkinFile("flick", GameConstants.NOTE_FLICK, skinDir);
+    }
+
+    private void tryLoadSfxFromSkinFile(String baseName, int noteType, File skinDir) {
+        for (String ext : SFX_EXTENSIONS) {
+            File file = new File(skinDir, baseName + ext);
+            if (!file.isFile()) continue;
+            try {
+                PcmDecoder.DecodedAudio sfx;
+                if (".wav".equals(ext)) {
+                    sfx = WavDecoder.decodeWavFileToFloatPcm(file);
+                } else {
+                    sfx = PcmDecoder.decodeFileToFloatPcm(file.getAbsolutePath());
+                }
+                if (sfx != null && sfx.pcm != null && sfx.pcm.length > 0) {
+                    NativeAudioEngine.setSfxData(noteType, sfx.pcm, sfx.sampleRate, sfx.channels);
+                    return;
+                }
+            } catch (Throwable ignored) {}
+        }
+    }
+
     @Override
     protected void onPause() {
         super.onPause();
@@ -625,6 +664,7 @@ public class PlayActivity extends AppCompatActivity implements GameRenderer.Call
             playBundle.putBoolean(EXTRA_APFC, apfcIndicator);
             playBundle.putBoolean(EXTRA_AUTOPLAY, autoplay);
             playBundle.putBoolean(EXTRA_CHALLENGE, challengeMode);
+            playBundle.putString(EXTRA_SKIN_PATH, skinPath);
 
             Intent it = new Intent(this, ResultActivity.class);
             it.putExtra(ResultActivity.EXTRA_PLAY_BUNDLE, playBundle);

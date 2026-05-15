@@ -12,12 +12,15 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
 
+import com.google.android.material.button.MaterialButton;
 import com.google.android.material.slider.Slider;
 import com.google.android.material.switchmaterial.SwitchMaterial;
 import com.google.android.material.textfield.MaterialAutoCompleteTextView;
 import com.google.android.material.textfield.TextInputEditText;
 import com.wuying.phigros.R;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Locale;
 
 public class SelectVideoFragment extends Fragment {
@@ -49,6 +52,10 @@ public class SelectVideoFragment extends Fragment {
     private SwitchMaterial swMultiHighlight;
     private SwitchMaterial swApfc;
 
+    private MaterialAutoCompleteTextView actSkin;
+    private MaterialButton btnSkinImport;
+    private MaterialButton btnSkinDelete;
+
     private boolean suppress = false;
 
     @Nullable
@@ -75,6 +82,31 @@ public class SelectVideoFragment extends Fragment {
         swShowDebug = view.findViewById(R.id.sw_show_debug);
         swMultiHighlight = view.findViewById(R.id.sw_multi_highlight);
         swApfc = view.findViewById(R.id.sw_apfc);
+
+        actSkin = view.findViewById(R.id.act_skin);
+        btnSkinImport = view.findViewById(R.id.btn_skin_import);
+        btnSkinDelete = view.findViewById(R.id.btn_skin_delete);
+
+        if (btnSkinImport != null) {
+            btnSkinImport.setOnClickListener(v -> host().launchPickSkin());
+        }
+        if (btnSkinDelete != null) {
+            btnSkinDelete.setOnClickListener(v -> {
+                int idx = host().getSelectedSkinIndex();
+                List<SkinManager.SkinEntry> entries = SkinManager.getSkinList(requireContext());
+                if (idx > 0 && idx < entries.size()) {
+                    SkinManager.SkinEntry entry = entries.get(idx);
+                    if (!entry.isBuiltin()) {
+                        SkinManager.deleteSkin(requireContext(), entry.id);
+                        host().setSelectedSkinIndex(0);
+                        refreshSkinDropdown();
+                    }
+                }
+            });
+        }
+        if (actSkin != null) {
+            refreshSkinDropdown();
+        }
 
         if (actPreset != null) {
             android.widget.ArrayAdapter<String> ad = new android.widget.ArrayAdapter<>(
@@ -183,9 +215,45 @@ public class SelectVideoFragment extends Fragment {
         refreshFromActivity();
     }
 
+    private void refreshSkinDropdown() {
+        if (actSkin == null) return;
+        List<SkinManager.SkinEntry> entries = SkinManager.getSkinList(requireContext());
+        List<String> names = new ArrayList<>();
+        for (SkinManager.SkinEntry e : entries) {
+            names.add(e.name);
+        }
+        android.widget.ArrayAdapter<String> ad = new android.widget.ArrayAdapter<>(
+                requireContext(),
+                android.R.layout.simple_list_item_1,
+                names
+        );
+        actSkin.setAdapter(ad);
+        int sel = host().getSelectedSkinIndex();
+        if (sel >= 0 && sel < names.size()) {
+            actSkin.setText(names.get(sel), false);
+        }
+        if (btnSkinDelete != null) {
+            btnSkinDelete.setEnabled(sel > 0);
+        }
+        if (actSkin != null) {
+            actSkin.setOnItemClickListener((parent, v, position, id) -> {
+                int idx = host().getSelectedSkinIndex();
+                if (idx == position) return;
+                List<SkinManager.SkinEntry> ents = SkinManager.getSkinList(requireContext());
+                if (position >= 0 && position < ents.size()) {
+                    host().setSelectedSkinIndex(position);
+                    if (btnSkinDelete != null) {
+                        btnSkinDelete.setEnabled(position > 0);
+                    }
+                }
+            });
+        }
+    }
+
     private void refreshFromActivity() {
         ChartSelectActivity a = host();
         suppress = true;
+        refreshSkinDropdown();
         float ar = a.getAspectRatio();
         if (actPreset != null) {
             if (ar <= 0f) {

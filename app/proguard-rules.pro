@@ -92,6 +92,16 @@
     <init>();
     <fields>;
 }
+-keep class com.wuying.phigros.game.SkinConfig {
+    <init>();
+    <fields>;
+}
+-keep class com.wuying.phigros.ui.SkinManager {
+    public <methods>;
+}
+-keep class com.wuying.phigros.ui.SkinManager$SkinEntry {
+    <fields>;
+}
 -keep class com.wuying.phigros.game.PrprEffect {
     <init>();
     <fields>;
