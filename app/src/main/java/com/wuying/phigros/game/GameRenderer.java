@@ -67,6 +67,9 @@ public class GameRenderer implements GLSurfaceView.Renderer {
          * Used by Activity overlay UI to align with the stage.
          */
         void onStageRectChanged(float left, float top, float width, float height);
+
+        /** Called when GL resources (textures, shaders) finish loading on the GL thread. */
+        void onResourcesReady();
     }
 
     /** Exposed for Activity to decide whether to intercept BACK etc. */
@@ -133,6 +136,7 @@ public class GameRenderer implements GLSurfaceView.Renderer {
                             item.animStartCached = false;
                             item.animStartSec = 0f;
                             item.positionCached = false;
+                            item.cachedLineRotDeg = 0f;
                         }
                     }
                 }
@@ -255,9 +259,20 @@ public class GameRenderer implements GLSurfaceView.Renderer {
     @Nullable
     private final String skinPath;
     @Nullable
-    private SkinConfig skinConfig;
+    private volatile SkinConfig skinConfig;
     private final float[] skinPColor = {GameConstants.PCOLOR_R, GameConstants.PCOLOR_G, GameConstants.PCOLOR_B};
     private final float[] skinGColor = {GameConstants.GCOLOR_R, GameConstants.GCOLOR_G, GameConstants.GCOLOR_B};
+    private float skinPAlpha = GameConstants.PALPHA;
+    private float skinGAlpha = GameConstants.GALPHA;
+    // Cached skin config values for low-overhead render-path access
+    private volatile float skinHitFxScale = 1.0f;
+    private volatile float skinHitFxDuration = 0.5f;
+    private volatile boolean skinHitFxRotate = false;
+    private volatile boolean skinHitFxTinted = true;
+    private volatile boolean skinHideParticles = false;
+    private volatile boolean skinHoldCompact = false;
+    private volatile boolean skinHoldKeepHead = false;
+    private volatile boolean skinHoldRepeat = false;
 
     // intro: animation (1.2s) + hold (0.2s) before music/chart starts.
     // During the animation, a fake judge line extends from center to full width.
@@ -551,6 +566,7 @@ public class GameRenderer implements GLSurfaceView.Renderer {
     private final ArrayList<HitEffect> hitEffects = new ArrayList<>();
     private final ArrayList<BadEffect> badEffects = new ArrayList<>();
     private final float[] tmpNotePos = new float[2];
+    private final float[] lineRotOut = new float[1];
 
     // Menu blur FBO
     private FboTex sceneFbo;
@@ -620,6 +636,26 @@ public class GameRenderer implements GLSurfaceView.Renderer {
         this.showDebugInfo = showDebugInfo;
         this.skinPath = skinPath;
         this.callback = callback;
+
+        // Load skin config early (on background thread) so cached values
+        // are available before onSurfaceCreated ever runs on the GL thread.
+        if (skinPath != null && !skinPath.isEmpty()) {
+            skinConfig = com.wuying.phigros.ui.SkinManager.loadSkinConfig(new File(skinPath));
+            if (skinConfig != null) {
+                float pA = parseSkinColor(skinConfig.colorPerfect, skinPColor);
+                float gA = parseSkinColor(skinConfig.colorGood, skinGColor);
+                if (pA >= 0f) skinPAlpha = pA;
+                if (gA >= 0f) skinGAlpha = gA;
+                skinHitFxScale = skinConfig.hitFxScale > 0f ? skinConfig.hitFxScale : 1.0f;
+                skinHitFxDuration = skinConfig.hitFxDuration > 0f ? skinConfig.hitFxDuration : 0.5f;
+                skinHitFxRotate = skinConfig.hitFxRotate;
+                skinHitFxTinted = skinConfig.hitFxTinted;
+                skinHideParticles = skinConfig.hideParticles;
+                skinHoldCompact = skinConfig.holdCompact;
+                skinHoldKeepHead = skinConfig.holdKeepHead;
+                skinHoldRepeat = skinConfig.holdRepeat;
+            }
+        }
 
         // HUD font (used for score/combo/song/diff text rendered in GL).
         try {
@@ -1378,11 +1414,11 @@ public class GameRenderer implements GLSurfaceView.Renderer {
             // should NOT add another effect
             if (jr == JR_PERFECT) {
                 if (n.type != GameConstants.NOTE_DRAG && n.type != GameConstants.NOTE_FLICK && n.type != GameConstants.NOTE_HOLD) {
-                    spawnHitEffect(n, frameChartTimeSec, skinPColor[0], skinPColor[1], skinPColor[2], GameConstants.PALPHA, 4);
+                    spawnHitEffect(n, frameChartTimeSec, skinPColor[0], skinPColor[1], skinPColor[2], skinPAlpha, 4);
                 }
             } else if (jr == JR_GOOD) {
                 if (n.type != GameConstants.NOTE_DRAG && n.type != GameConstants.NOTE_FLICK && n.type != GameConstants.NOTE_HOLD) {
-                    spawnHitEffect(n, frameChartTimeSec, skinGColor[0], skinGColor[1], skinGColor[2], GameConstants.GALPHA, 3);
+                    spawnHitEffect(n, frameChartTimeSec, skinGColor[0], skinGColor[1], skinGColor[2], skinGAlpha, 3);
                 }
             } else if (jr == JR_BAD) {
                 // Bad: tint note and fade out (no hit effect on line)
@@ -1497,17 +1533,11 @@ public class GameRenderer implements GLSurfaceView.Renderer {
             respack.hitFx = new int[]{4, 4};
         }
 
-        // Load skin config and override respack if available
-        skinConfig = null;
-        if (skinPath != null && !skinPath.isEmpty()) {
-            skinConfig = com.wuying.phigros.ui.SkinManager.loadSkinConfig(new File(skinPath));
-            if (skinConfig != null) {
-                if (skinConfig.holdAtlas != null) respack.holdAtlas = skinConfig.holdAtlas;
-                if (skinConfig.holdAtlasMH != null) respack.holdAtlasMH = skinConfig.holdAtlasMH;
-                if (skinConfig.hitFx != null) respack.hitFx = skinConfig.hitFx;
-                parseSkinColor(skinConfig.colorPerfect, skinPColor);
-                parseSkinColor(skinConfig.colorGood, skinGColor);
-            }
+        // Apply skin config overrides to respack (config was already loaded in constructor)
+        if (skinConfig != null) {
+            if (skinConfig.holdAtlas != null) respack.holdAtlas = skinConfig.holdAtlas;
+            if (skinConfig.holdAtlasMH != null) respack.holdAtlasMH = skinConfig.holdAtlasMH;
+            if (skinConfig.hitFx != null) respack.hitFx = skinConfig.hitFx;
         }
 
         // Load textures (assets)
@@ -1537,8 +1567,17 @@ public class GameRenderer implements GLSurfaceView.Renderer {
         texHitFx = loadSkinTexture("hit_fx.png", "res/hit_fx.png");
 
         // hold body textures (for holdRepeat mode)
+        // Prefer hold_body.png / hold_body_mh.png if provided by the skin.
+        // Otherwise, crop the body section from the full hold texture.
         texHoldBody = loadSkinTexture("hold_body.png", null);
         texHoldBodyMh = loadSkinTexture("hold_body_mh.png", null);
+        if (texHoldBody == null && texHold != null) {
+            texHoldBody = cropHoldBodyTexture("hold.png", "res/hold.png", respack.holdAtlas);
+        }
+        if (texHoldBodyMh == null && texHoldMh != null) {
+            int[] atlasMH = (respack.holdAtlasMH != null) ? respack.holdAtlasMH : respack.holdAtlas;
+            texHoldBodyMh = cropHoldBodyTexture("hold_mh.png", "res/hold_mh.png", atlasMH);
+        }
 
         // background from file
         if (texBackground != null) {
@@ -1556,6 +1595,12 @@ public class GameRenderer implements GLSurfaceView.Renderer {
         // prpr storyboard shaders (extra.json)
         if (hasPrprEffects) {
             initPrprShaderPrograms();
+        }
+
+        // Notify the UI thread that GL resources are fully loaded.
+        // The caller can use this to defer audio start until after texture upload.
+        if (callback != null) {
+            new android.os.Handler(android.os.Looper.getMainLooper()).post(() -> callback.onResourcesReady());
         }
     }
 
@@ -2895,24 +2940,17 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
                         // body behind end). Match this order: head → body → tail.
                         if (!reverseHoldLocked) {
                         // --- Head ---
-                        // hold container layout (head above body):
-                        // head center at judgmentPoint + headH/2
-                        // body start  at judgmentPoint
-                        // Shift both head and body down by 0.4 * headH to match, keeping them adjacent:
-                        // head center at visualFp - 0.4 * headH
-                        // body start  at visualFp + 0.1 * headH
-                        boolean keepHead = skinConfig != null && skinConfig.holdKeepHead;
-                        boolean holdCompact = skinConfig != null && skinConfig.holdCompact;
-                        float headOffset = holdCompact ? 0.15f : 0.4f;
+                        boolean keepHead = skinHoldKeepHead;
+                        boolean holdCompact = skinHoldCompact;
+                        float headOffset = 0.4f;
                         if (!holdHeadPassedLine || keepHead) {
-                            float headCenterFp;
-                            if (holdHeadPassedLine && keepHead) {
-                                headCenterFp = transYPx - noteHeadH * headOffset;
-                            } else {
-                                headCenterFp = visualFp - noteHeadH * headOffset;
+                            float headCenterFp = visualFp - noteHeadH * headOffset;
+                            if (holdCompact) {
+                                headCenterFp += noteHeadH * 0.5f;
                             }
                             // Clamp: keep at least half the head visible above the judge line.
-                            float headDrawFp = Math.max(-noteHeadH * 0.5f, headCenterFp);
+                            float headClampMin = holdCompact ? 0f : -noteHeadH * 0.5f;
+                            float headDrawFp = Math.max(headClampMin, headCenterFp);
                             float headX = noteAtX + headDrawFp * dirX;
                             float headY = noteAtY + headDrawFp * dirY;
                             if (isNoteRectInArea(headX, headY, noteWidth, noteHeadH, drawRot, noteCullL, noteCullT, noteCullR, noteCullB)) {
@@ -2924,10 +2962,9 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
                         float bodyStartFp, bodyEndFp;
                         if (holdHeadPassedLine) {
                             bodyStartFp = drawHeadFp;
-                            // Body extends to meet the shifted tail (tail shifted +tailH).
                             bodyEndFp = drawTailFp;
                         } else {
-                            float bodyHeadAdj = (0.5f - headOffset) * noteHeadH;
+                            float bodyHeadAdj = holdCompact ? noteHeadH * 0.1f : (0.5f - headOffset) * noteHeadH;
                             bodyStartFp = visualFp + bodyHeadAdj;
                             bodyEndFp = drawTailFp;
                         }
@@ -2945,29 +2982,21 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
                         float drawLen = drawEndFp - drawStartFp;
 
                         if (drawLen > 0.01f) {
-                            boolean useHoldRepeat = skinConfig != null && skinConfig.holdRepeat;
+                            boolean useHoldRepeat = skinHoldRepeat;
                             if (useHoldRepeat) {
-                                float bodyPixelH = holdUv.bodyV1 > holdUv.bodyV0
-                                        ? (holdUv.bodyV1 - holdUv.bodyV0) * (float) holdTex.height
-                                        : 0f;
-                                if (bodyPixelH > 0f && holdTex.width > 0) {
-                                    float bodyTileH = noteWidth * bodyPixelH / (float) holdTex.width;
+                                Texture bodyTex = note.morebets == 1 ? texHoldBodyMh : texHoldBody;
+                                if (bodyTex != null && bodyTex.width > 0 && bodyTex.height > 0) {
+                                    float bodyTileH = noteWidth * (float) bodyTex.height / (float) bodyTex.width;
                                     if (bodyTileH > 1f) {
-                                        float pos = drawStartFp;
-                                        while (pos < drawEndFp) {
-                                            float remaining = drawEndFp - pos;
-                                            float tileH = Math.min(bodyTileH, remaining);
-                                            float tileVFrac = tileH / bodyTileH;
-                                            float tileV1 = holdUv.bodyV0 + (holdUv.bodyV1 - holdUv.bodyV0) * tileVFrac;
-                                            float tileCenterFp = pos + tileH / 2f;
-                                            float tileX = noteAtX + tileCenterFp * dirX;
-                                            float tileY = noteAtY + tileCenterFp * dirY;
-                                            if (isNoteRectInArea(tileX, tileY, noteWidth, tileH, drawRot, noteCullL, noteCullT, noteCullR, noteCullB)) {
-                                                addQuadToBatch(tileX, tileY, noteWidth, tileH, drawRot, 1f, 1f, 1f, noteAlpha, 0f, holdUv.bodyV0, 1f, tileV1);
-                                            }
-                                            pos += tileH;
-                                            if (batchCount >= MAX_BATCH_QUADS - 3) flushBatch(holdTex);
+                                        flushBatch(holdTex);
+                                        float bodyV1 = drawLen / bodyTileH;
+                                        float bodyCenterFp = (drawStartFp + drawEndFp) / 2f;
+                                        float bodyX = noteAtX + bodyCenterFp * dirX;
+                                        float bodyY = noteAtY + bodyCenterFp * dirY;
+                                        if (isNoteRectInArea(bodyX, bodyY, noteWidth, drawLen, drawRot, noteCullL, noteCullT, noteCullR, noteCullB)) {
+                                            addQuadToBatch(bodyX, bodyY, noteWidth, drawLen, drawRot, 1f, 1f, 1f, noteAlpha, 0f, 0f, 1f, bodyV1);
                                         }
+                                        flushBatch(bodyTex);
                                         continue;
                                     }
                                 }
@@ -2981,12 +3010,13 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
 
                         // --- Tail ---
                         {
-                            // Lift tail up by 1 tail height away from the head.
-                            float tailTipFp = drawTailFp + tailH;
+                            float tailOffset = holdCompact ? tailH * 0.5f : tailH;
+                            float tailTipFp = drawTailFp + tailOffset;
+                            float tailClamp = Math.abs(tailOffset);
                             if (!isReverseHold) {
-                                if (tailTipFp < tailH) tailTipFp = tailH;
+                                if (tailTipFp < tailClamp) tailTipFp = tailClamp;
                             } else {
-                                if (tailTipFp > -tailH) tailTipFp = -tailH;
+                                if (tailTipFp > -tailClamp) tailTipFp = -tailClamp;
                             }
                             float tailPosFp = tailTipFp - (tailH / 2f);
                             float tailX = noteAtX + tailPosFp * dirX;
@@ -3570,6 +3600,10 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
                     g = GameConstants.AP_INDICATOR_COLOR[1];
                     b = GameConstants.AP_INDICATOR_COLOR[2];
                 }
+            } else if (skinConfig != null && skinConfig.colorPerfect != null) {
+                r = skinPColor[0];
+                g = skinPColor[1];
+                b = skinPColor[2];
             } else {
                 r = 1f;
                 g = 1f;
@@ -4697,7 +4731,7 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
         }
 
         // Downsample to reduce cost
-                int bw = Math.max(128, viewW / 8);
+        int bw = Math.max(128, viewW / 8);
         int bh = Math.max(128, viewH / 8);
         bgBlurA = new FboTex(bw, bh);
         bgBlurB = new FboTex(bw, bh);
@@ -4706,9 +4740,7 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
         renderBackgroundToFbo(bgBlurA);
 
         // multiple blur iterations to approximate stronger blur radius
-        // 6 iterations (12 passes) provides a good balance between visual quality and GPU cost.
-        // This matches phispler's approach of using a reasonable blur radius rather than extreme iteration count.
-                int iterations = 6;
+        int iterations = 8;
         float offX = 2f / (float) bw;
         float offY = 2f / (float) bh;
         for (int i = 0; i < iterations; i++) {
@@ -5097,7 +5129,7 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
             if (note.preJudge && deltaTime < 0.005) {
                 note.preJudge = false;
                 NativeAudioEngine.triggerSfx(GameConstants.NOTE_DRAG);
-                spawnHitEffect(note, tChart, skinPColor[0], skinPColor[1], skinPColor[2], GameConstants.PALPHA, 4);
+                spawnHitEffect(note, tChart, skinPColor[0], skinPColor[1], skinPColor[2], skinPAlpha, 4);
                 commitJudgement(note, JR_PERFECT, 0.0);
             }
             // Late Miss: v5 < -0.1 && !isJudged → Miss
@@ -5226,7 +5258,7 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
             if (note.preJudge && deltaTime < 0.005) {
                 note.preJudge = false;
                 NativeAudioEngine.triggerSfx(GameConstants.NOTE_FLICK);
-                spawnHitEffect(note, tChart, skinPColor[0], skinPColor[1], skinPColor[2], GameConstants.PALPHA, 4);
+                spawnHitEffect(note, tChart, skinPColor[0], skinPColor[1], skinPColor[2], skinPAlpha, 4);
                 commitJudgement(note, JR_PERFECT, 0.0);
             }
         }
@@ -5256,7 +5288,7 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
                 double dt = note.sect - tChart;
                 if (dt < 0.005) {
                     NativeAudioEngine.triggerSfx(GameConstants.NOTE_DRAG);
-                    spawnHitEffect(note, tChart, skinPColor[0], skinPColor[1], skinPColor[2], GameConstants.PALPHA, 4);
+                    spawnHitEffect(note, tChart, skinPColor[0], skinPColor[1], skinPColor[2], skinPAlpha, 4);
                     commitJudgement(note, JR_PERFECT, 0.0);
                     continue;
                 }
@@ -5333,7 +5365,7 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
                         note.holdTapTimeMs = System.nanoTime() / 1_000_000L;
                         note.holdBroken = false;
                         if (holdHeadSpawned.add(note)) {
-                            spawnHoldHeadHitEffect(note, tChart, skinPColor[0], skinPColor[1], skinPColor[2], GameConstants.PALPHA, 4);
+                            spawnHoldHeadHitEffect(note, tChart, skinPColor[0], skinPColor[1], skinPColor[2], skinPAlpha, 4);
                         }
                     }
                     note.statOffset = deltaTime;
@@ -5360,7 +5392,7 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
                         note.holdTapTimeMs = System.nanoTime() / 1_000_000L;
                         note.holdBroken = false;
                         if (holdHeadSpawned.add(note)) {
-                            spawnHoldHeadHitEffect(note, tChart, skinGColor[0], skinGColor[1], skinGColor[2], GameConstants.GALPHA, 3);
+                            spawnHoldHeadHitEffect(note, tChart, skinGColor[0], skinGColor[1], skinGColor[2], skinGAlpha, 3);
                         }
                     }
                     note.statOffset = deltaTime;
@@ -5416,9 +5448,9 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
             while (tChart >= n.holdFxAtSec) {
                 if (n.holdFxAtSec + interval <= n.holdEndTime) {
                     if (n.holdPerfect) {
-                        spawnHitEffect(n, n.holdFxAtSec, skinPColor[0], skinPColor[1], skinPColor[2], GameConstants.PALPHA, 4);
+                        spawnHitEffect(n, n.holdFxAtSec, skinPColor[0], skinPColor[1], skinPColor[2], skinPAlpha, 4);
                     } else {
-                        spawnHitEffect(n, n.holdFxAtSec, skinGColor[0], skinGColor[1], skinGColor[2], GameConstants.GALPHA, 3);
+                        spawnHitEffect(n, n.holdFxAtSec, skinGColor[0], skinGColor[1], skinGColor[2], skinGAlpha, 3);
                     }
                 }
                 n.holdFxAtSec += interval;
@@ -5438,9 +5470,9 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
                     && tChart >= n.holdEndTime - HOLD_TAIL_EARLY_SETTLE) {
                 while (n.holdFxAtSec + interval <= n.holdEndTime) {
                     if (n.holdPerfect) {
-                        spawnHitEffect(n, n.holdFxAtSec, skinPColor[0], skinPColor[1], skinPColor[2], GameConstants.PALPHA, 4);
+                        spawnHitEffect(n, n.holdFxAtSec, skinPColor[0], skinPColor[1], skinPColor[2], skinPAlpha, 4);
                     } else {
-                        spawnHitEffect(n, n.holdFxAtSec, skinGColor[0], skinGColor[1], skinGColor[2], GameConstants.GALPHA, 3);
+                        spawnHitEffect(n, n.holdFxAtSec, skinGColor[0], skinGColor[1], skinGColor[2], skinGAlpha, 3);
                     }
                     n.holdFxAtSec += interval;
                 }
@@ -5542,7 +5574,7 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
         return Math.abs(fingerPositionX - notePositionX);
     }
 
-    /**: getJudgeOffset = |noteLocalX - touchLocalX| / judgeArea (along-line distance) */
+    /** getJudgeOffset = |noteLocalX - touchLocalX| / judgeArea (along-line distance) */
     private float getJudgeOffset(float touchX, float touchY, Note note, double tChart, float stageAspect) {
         JudgeLine line = note.master;
         if (line == null) return Float.MAX_VALUE;
@@ -5559,7 +5591,7 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
         return Math.abs(noteLocalX - touchLocalX) / (note.judgeArea > 0 ? note.judgeArea : 1.0f);
     }
 
-    /**: getJudgeDistance = getJudgeOffset + |touchLocalY| (Manhattan distance) */
+    /** getJudgeDistance = getJudgeOffset + |touchLocalY| (Manhattan distance) */
     private float getJudgeDistance(float touchX, float touchY, Note note, double tChart, float stageAspect) {
         JudgeLine line = note.master;
         if (line == null) return Float.MAX_VALUE;
@@ -5658,13 +5690,13 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
 
     private void spawnHitEffect(@NonNull Note note, double timeSec, float r, float g, float b, float a, int numOfParts) {
         if (texHitFx == null || texWhite == null) return;
-        
+
         // Default: effect appears on the judge line (for tap notes, drag, flick, and hold ongoing effects)
-        if (!computeNoteHeadPositionOnLine(note, timeSec, tmpNotePos)) return;
+        if (!computeNoteHeadPositionOnLine(note, timeSec, tmpNotePos, lineRotOut)) return;
 
         double spd = Math.max(0.001f, musicSpeed);
         double lag = Math.max(0.0, (frameChartTimeSec - timeSec) / spd);
-        hitEffects.add(new HitEffect((float) (visualTimeSec - lag), tmpNotePos[0], tmpNotePos[1], r, g, b, a, numOfParts));
+        hitEffects.add(new HitEffect((float) (visualTimeSec - lag), tmpNotePos[0], tmpNotePos[1], r, g, b, a, numOfParts, lineRotOut[0]));
     }
 
     /**
@@ -5676,17 +5708,32 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
         if (note.sect > timeSec) {
             // Head hasn't reached the line yet — spawn at head's current visual position
             if (!computeNoteHeadPosition(note, timeSec, tmpNotePos)) return;
+            getLineRotDeg(note, timeSec, lineRotOut);
         } else {
             // Head has already passed the line — spawn on the judge line
-            if (!computeNoteHeadPositionOnLine(note, timeSec, tmpNotePos)) return;
+            if (!computeNoteHeadPositionOnLine(note, timeSec, tmpNotePos, lineRotOut)) return;
         }
 
         double spd = Math.max(0.001f, musicSpeed);
         double lag = Math.max(0.0, (frameChartTimeSec - timeSec) / spd);
-        hitEffects.add(new HitEffect((float) (visualTimeSec - lag), tmpNotePos[0], tmpNotePos[1], r, g, b, a, numOfParts));
+        hitEffects.add(new HitEffect((float) (visualTimeSec - lag), tmpNotePos[0], tmpNotePos[1], r, g, b, a, numOfParts, lineRotOut[0]));
+    }
+
+    private void getLineRotDeg(@NonNull Note note, double tChart, @NonNull float[] outRotDeg) {
+        if (note.master == null) {
+            outRotDeg[0] = 0f;
+            return;
+        }
+        float stageAspect = (stageH > 1e-6f) ? (stageW / stageH) : (16f / 9f);
+        JudgeLine.StateHolder st = note.master.fillState(tChart, stageAspect);
+        if (st != null) {
+            outRotDeg[0] = st.rotateDeg + (note.isAbove ? 0f : 180f);
+        } else {
+            outRotDeg[0] = 0f;
+        }
     }
     
-    private boolean computeNoteHeadPositionOnLine(@NonNull Note note, double tChart, @NonNull float[] outXY) {
+    private boolean computeNoteHeadPositionOnLine(@NonNull Note note, double tChart, @NonNull float[] outXY, @Nullable float[] outRotDeg) {
         if (note.master == null) return false;
         JudgeLine line = note.master;
         float stageAspect = (stageH > 1e-6f) ? (stageW / stageH) : (16f / 9f);
@@ -5694,6 +5741,9 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
         if (st == null) return false;
 
         float lineRot = st.rotateDeg;
+        if (outRotDeg != null) {
+            outRotDeg[0] = lineRot + (note.isAbove ? 0f : 180f);
+        }
         float lineX = stageL + st.xNorm * stageW;
         float lineY = stageT + st.yNorm * stageH;
         double rad = lineRot * Math.PI / 180.0;
@@ -5850,8 +5900,9 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
         final int numOfParts;
         final float[] effectRotateDeg = new float[4];
         final float[] effectRBase = new float[4];
+        final float lineRotDeg;
 
-        HitEffect(float timeSec, float x, float y, float r, float g, float b, float a, int numOfParts) {
+        HitEffect(float timeSec, float x, float y, float r, float g, float b, float a, int numOfParts, float lineRotDeg) {
             this.timeSec = timeSec;
             this.x = x;
             this.y = y;
@@ -5860,6 +5911,7 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
             this.b = b;
             this.a = a;
             this.numOfParts = numOfParts;
+            this.lineRotDeg = lineRotDeg;
             for (int i = 0; i < 4; i++) {
                 effectRotateDeg[i] = (float) (Math.random() * 360f);
                 effectRBase[i] = 185f + (float) (Math.random() * (265f - 185f));
@@ -6035,10 +6087,10 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
         int rows = Math.max(1, respack.hitFx[1]);
         int frames = cols * rows;
 
-        final double dur = 0.5;
+        final double dur = skinHitFxDuration;
         final double tVis = visualTimeSec;
         float noteWidth = stageW * 0.1234375f * keyScale;
-        float effectSize = noteWidth * 1.375f * 1.12f;
+        float effectSize = noteWidth * 1.375f * 1.12f * skinHitFxScale;
 
         List<ClickEffectItem> eff = chart.clickEffectsSorted;
         if (eff == null) return;
@@ -6082,21 +6134,27 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
 
             int cx = idx % cols;
             int cy = idx / cols;
-            float u0 = (float) cx / (float) cols;
-            float u1 = (float) (cx + 1) / (float) cols;
-            float v0 = (float) cy / (float) rows;
-            float v1 = (float) (cy + 1) / (float) rows;
+            float halfU = 0.5f / (float) texHitFx.width;
+            float halfV = 0.5f / (float) texHitFx.height;
+            float u0 = (float) cx / (float) cols + halfU;
+            float u1 = (float) (cx + 1) / (float) cols - halfU;
+            float v0 = (float) cy / (float) rows + halfV;
+            float v1 = (float) (cy + 1) / (float) rows - halfV;
 
             if (item.note == null || item.note.master == null) continue;
 
             float x, y;
+            float lineRotDeg;
             if (item.positionCached) {
                 x = item.cachedScreenX;
                 y = item.cachedScreenY;
+                lineRotDeg = item.cachedLineRotDeg;
             } else {
                 float stageAspect = (stageH > 1e-6f) ? (stageW / stageH) : (16f / 9f);
                 JudgeLine.StateHolder st = item.note.master.fillState(item.timeSec, stageAspect);
+                if (st == null) continue;
                 float lineRot = st.rotateDeg;
+                lineRotDeg = lineRot + (item.note.isAbove ? 0f : 180f);
                 float lineX = stageL + st.xNorm * stageW;
                 float lineY = stageT + st.yNorm * stageH;
                 double rad = lineRot * Math.PI / 180.0;
@@ -6107,11 +6165,17 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
                 y = lineY + off * sinLine;
                 item.cachedScreenX = x;
                 item.cachedScreenY = y;
+                item.cachedLineRotDeg = lineRotDeg;
                 item.positionCached = true;
             }
 
-            addQuadToBatch(x, y, effectSize, effectSize, 0f,
-                    skinPColor[0], skinPColor[1], skinPColor[2], GameConstants.PALPHA,
+            float sheetRot = skinHitFxRotate ? lineRotDeg : 0f;
+            float tintR = skinHitFxTinted ? skinPColor[0] : 1f;
+            float tintG = skinHitFxTinted ? skinPColor[1] : 1f;
+            float tintB = skinHitFxTinted ? skinPColor[2] : 1f;
+
+            addQuadToBatch(x, y, effectSize, effectSize, sheetRot,
+                    tintR, tintG, tintB, skinPAlpha,
                     u0, v0, u1, v1);
 
             if (batchCount >= MAX_BATCH_QUADS) flushHitFxBatch(texHitFx);
@@ -6123,8 +6187,9 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
                 GLES20.GL_ONE, GLES20.GL_ONE_MINUS_SRC_ALPHA);
 
         // 2. Batch particles
+        if (!skinHideParticles) {
         float s = stageW / 4040f * 3f;
-        float baseSize = s * 30f;
+        float baseSize = s * 30f * skinHitFxScale;
 
         for (int i = clickEffectIndex; i < eff.size(); i++) {
             ClickEffectItem item = eff.get(i);
@@ -6160,6 +6225,7 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
             }
         }
         flushBatch(texWhite);
+        } // !skinHideParticles
     }
 
     private void drawBadEffects(double tChart) {
@@ -6207,11 +6273,10 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
         int rows = Math.max(1, respack.hitFx[1]);
         int frames = cols * rows;
 
-        final double dur = (skinConfig != null && skinConfig.hitFxDuration > 0f) ? skinConfig.hitFxDuration : 0.5;
+        final double dur = skinHitFxDuration;
         final double tVis = visualTimeSec;
         float noteWidth = stageW * 0.1234375f * keyScale;
-        float fxScale = (skinConfig != null && skinConfig.hitFxScale > 0f) ? skinConfig.hitFxScale : 1.0f;
-        float effectSize = noteWidth * 1.375f * 1.12f * fxScale;
+        float effectSize = noteWidth * 1.375f * 1.12f * skinHitFxScale;
 
         while (!hitEffects.isEmpty()) {
             HitEffect e = hitEffects.get(0);
@@ -6240,13 +6305,21 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
 
             int cx = idx % cols;
             int cy = idx / cols;
-            float u0 = (float) cx / (float) cols;
-            float u1 = (float) (cx + 1) / (float) cols;
-            float v0 = (float) cy / (float) rows;
-            float v1 = (float) (cy + 1) / (float) rows;
+            float halfU = 0.5f / (float) texHitFx.width;
+            float halfV = 0.5f / (float) texHitFx.height;
+            float u0 = (float) cx / (float) cols + halfU;
+            float u1 = (float) (cx + 1) / (float) cols - halfU;
+            float v0 = (float) cy / (float) rows + halfV;
+            float v1 = (float) (cy + 1) / (float) rows - halfV;
 
-            addQuadToBatch(item.x, item.y, effectSize, effectSize, 0f,
-                    item.r, item.g, item.b, item.a,
+            float tintR = skinHitFxTinted ? item.r : 1f;
+            float tintG = skinHitFxTinted ? item.g : 1f;
+            float tintB = skinHitFxTinted ? item.b : 1f;
+
+            float sheetRot = skinHitFxRotate ? item.lineRotDeg : 0f;
+
+            addQuadToBatch(item.x, item.y, effectSize, effectSize, sheetRot,
+                    tintR, tintG, tintB, item.a,
                     u0, v0, u1, v1);
             if (batchCount >= MAX_BATCH_QUADS) flushHitFxBatch(texHitFx);
         }
@@ -6256,10 +6329,9 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
                 GLES20.GL_ONE, GLES20.GL_ONE_MINUS_SRC_ALPHA);
 
         // 2. Particle debris
-        boolean hideParticles = skinConfig != null && skinConfig.hideParticles;
-        if (!hideParticles) {
+        if (!skinHideParticles) {
             float s = stageW / 4040f * 3f;
-            float baseSize = s * 30f;
+            float baseSize = s * 30f * skinHitFxScale;
             for (int i = 0; i < hitEffects.size(); i++) {
                 HitEffect item = hitEffects.get(i);
                 if (item.timeSec + dur < tVis) continue;
@@ -6700,7 +6772,7 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
         noteHeadTextureDrawList.clear();
         // Render order: Drag(2) < Click(1) < Flick(4).
         // Hold heads are rendered inside the body pass
-        // hold body+head are a single container), so NOTE_HOLD is excluded here.
+        // hold body+head are a single container, so NOTE_HOLD is excluded here.
         // In painter's algorithm, earlier draw = behind.
         int[] drawOrder = {
             GameConstants.NOTE_DRAG,
@@ -7286,9 +7358,11 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
         return loadTextureFromFileSafe(filePath, false);
     }
 
+    private static final int MAX_TEXTURE_DIM = 4096;
+
     private Texture loadTextureFromFileSafe(String filePath, boolean retainBitmap) {
         try {
-            Bitmap bmp = BitmapFactory.decodeFile(filePath);
+            Bitmap bmp = decodeBitmapDownsampled(filePath);
             if (bmp == null) return null;
             Texture t = uploadBitmapAsTexture(bmp, retainBitmap);
             if (t != null) {
@@ -7298,6 +7372,24 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
         } catch (Exception e) {
             return null;
         }
+    }
+
+    private static Bitmap decodeBitmapDownsampled(String filePath) {
+        BitmapFactory.Options opts = new BitmapFactory.Options();
+        opts.inJustDecodeBounds = true;
+        BitmapFactory.decodeFile(filePath, opts);
+        int w = opts.outWidth;
+        int h = opts.outHeight;
+        if (w <= 0 || h <= 0) return null;
+
+        int sample = 1;
+        while (w / sample > MAX_TEXTURE_DIM || h / sample > MAX_TEXTURE_DIM) {
+            sample *= 2;
+        }
+        opts.inJustDecodeBounds = false;
+        opts.inSampleSize = sample;
+        Bitmap bmp = BitmapFactory.decodeFile(filePath, opts);
+        return bmp;
     }
 
     private Texture loadGifTexture(String filePath) {
@@ -7417,17 +7509,76 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
         }
     }
 
-    private static void parseSkinColor(String hex, float[] out) {
-        if (hex == null || hex.isEmpty()) return;
-        String s = hex.trim();
+    private static float parseSkinColor(String s, float[] out) {
+        if (s == null || s.isEmpty()) return -1f;
+        s = s.trim();
+        // hex: "0xAARRGGBB", "AARRGGBB", "RRGGBB"
         if (s.startsWith("0x") || s.startsWith("0X")) s = s.substring(2);
-        if (s.length() < 6) return;
         try {
-            long v = Long.parseLong(s, 16);
-            out[0] = ((v >> 16) & 0xFF) / 255f;
-            out[1] = ((v >> 8) & 0xFF) / 255f;
-            out[2] = (v & 0xFF) / 255f;
-        } catch (NumberFormatException ignored) {}
+            if (s.length() >= 6 && s.chars().allMatch(c -> Character.digit(c, 16) >= 0)) {
+                long v = Long.parseLong(s, 16);
+                float alpha = -1f;
+                if (s.length() >= 8) {
+                    alpha = ((v >> 24) & 0xFF) / 255f;
+                    out[0] = ((v >> 16) & 0xFF) / 255f;
+                } else {
+                    out[0] = ((v >> 16) & 0xFF) / 255f;
+                }
+                out[1] = ((v >> 8) & 0xFF) / 255f;
+                out[2] = (v & 0xFF) / 255f;
+                return alpha;
+            }
+            // decimal integer (e.g. "16777215" for white)
+            long decimal = Long.parseLong(s);
+            float a = (decimal > 0xFFFFFFL) ? ((decimal >> 24) & 0xFF) / 255f : 1f;
+            out[0] = ((decimal >> 16) & 0xFF) / 255f;
+            out[1] = ((decimal >> 8) & 0xFF) / 255f;
+            out[2] = (decimal & 0xFF) / 255f;
+            return a;
+        } catch (NumberFormatException ignored) {
+            return -1f;
+        }
+    }
+
+    private Texture cropHoldBodyTexture(String fileName, String assetFallback, int[] atlas) {
+        if (atlas == null || atlas.length < 2) return null;
+        int tailH = atlas[0];
+        int headH = atlas[1];
+        // Load the full hold texture bitmap
+        Bitmap full = null;
+        if (skinPath != null && !skinPath.isEmpty()) {
+            String filePath = skinPath + "/" + fileName;
+            full = BitmapFactory.decodeFile(filePath);
+        }
+        if (full == null && assetFallback != null) {
+            try {
+                android.content.res.AssetManager am = context.getAssets();
+                java.io.InputStream is = am.open(assetFallback);
+                full = BitmapFactory.decodeStream(is);
+                is.close();
+            } catch (Exception ignored) {}
+        }
+        if (full == null) return null;
+        int w = full.getWidth();
+        int h = full.getHeight();
+        int bodyH = h - tailH - headH;
+        if (bodyH <= 0 || w <= 0) { full.recycle(); return null; }
+        Bitmap body = Bitmap.createBitmap(full, 0, tailH, w, bodyH);
+        full.recycle();
+        Texture t = new Texture();
+        int[] ids = new int[1];
+        GLES20.glGenTextures(1, ids, 0);
+        t.id = ids[0];
+        t.width = body.getWidth();
+        t.height = body.getHeight();
+        GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, t.id);
+        GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MIN_FILTER, GLES20.GL_LINEAR);
+        GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MAG_FILTER, GLES20.GL_LINEAR);
+        GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_S, GLES20.GL_CLAMP_TO_EDGE);
+        GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_T, GLES20.GL_REPEAT);
+        android.opengl.GLUtils.texImage2D(GLES20.GL_TEXTURE_2D, 0, body, 0);
+        body.recycle();
+        return t;
     }
 
     private Texture loadSkinTexture(String fileName, String assetFallback) {

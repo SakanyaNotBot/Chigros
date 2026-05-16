@@ -14,6 +14,7 @@ public class ClickEffectItem {
     public transient boolean positionCached = false;
     public transient float cachedScreenX;
     public transient float cachedScreenY;
+    public transient float cachedLineRotDeg;
     public transient boolean animStartCached = false;
     public transient float animStartSec;
 

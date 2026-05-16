@@ -94,7 +94,9 @@ public class PlayActivity extends AppCompatActivity implements GameRenderer.Call
     private ExecutorService loaderExecutor;
     private GameGLSurfaceView glView;
     private GameRenderer renderer;
-    private View loadingView;
+    private FrameLayout loadingView;
+    private ProgressBar loadingProgress;
+    private TextView loadingText;
     private FrameLayout rootLayout;
     private FrameLayout overlayLayout;
 
@@ -195,24 +197,24 @@ public class PlayActivity extends AppCompatActivity implements GameRenderer.Call
                 FrameLayout.LayoutParams.MATCH_PARENT,
                 FrameLayout.LayoutParams.MATCH_PARENT));
 
-        ProgressBar pb = new ProgressBar(this);
+        loadingProgress = new ProgressBar(this);
         FrameLayout.LayoutParams pbLp = new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.WRAP_CONTENT,
                 FrameLayout.LayoutParams.WRAP_CONTENT);
         pbLp.gravity = Gravity.CENTER;
-        pb.setLayoutParams(pbLp);
+        loadingProgress.setLayoutParams(pbLp);
 
-        TextView tv = new TextView(this);
+        loadingText = new TextView(this);
         FrameLayout.LayoutParams tvLp = new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.WRAP_CONTENT,
                 FrameLayout.LayoutParams.WRAP_CONTENT);
         tvLp.gravity = Gravity.CENTER_HORIZONTAL | Gravity.CENTER_VERTICAL;
         tvLp.topMargin = (int) (64 * getResources().getDisplayMetrics().density);
-        tv.setLayoutParams(tvLp);
-        tv.setText("加载中...\n(正在解析铺面与解码音频)");
+        loadingText.setLayoutParams(tvLp);
+        loadingText.setText("加载中...\n(正在解析铺面与解码音频)");
 
-        root.addView(pb);
-        root.addView(tv);
+        root.addView(loadingProgress);
+        root.addView(loadingText);
         loadingView = root;
         setContentView(root);
     }
@@ -282,20 +284,12 @@ public class PlayActivity extends AppCompatActivity implements GameRenderer.Call
                 glView.bindToRenderer(renderer);
 
                 hintSurfaceFrameRateIfPossible();
-                buildOverlayUi();
-
-                new Handler(Looper.getMainLooper()).postDelayed(() -> {
-                    if (isFinishing() || isDestroyed()) return;
-                    if (renderer == null) return;
-
-                    renderer.beginIntro();
-                    new Handler(Looper.getMainLooper()).postDelayed(() -> {
-                        if (isFinishing() || isDestroyed()) return;
-                        if (renderer != null && renderer.isMenuVisible()) return;
-                        NativeAudioEngine.start();
-                    }, GameRenderer.INTRO_BUFFER_MS);
-                }, 150L);
-
+                // Add glView behind the loading indicator so GL can initialize.
+                // loadingView stays as content view the entire time — never detached,
+                // so the ProgressBar animation runs smoothly without jumping.
+                loadingView.addView(glView, 0, new FrameLayout.LayoutParams(
+                        FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
+                buildOverlayUiOn(loadingView);
                 startUiTicker();
             });
         } catch (Throwable e) {
@@ -362,10 +356,8 @@ public class PlayActivity extends AppCompatActivity implements GameRenderer.Call
         } catch (Throwable ignored) {}
     }
 
-    private void buildOverlayUi() {
-        rootLayout = new FrameLayout(this);
-        rootLayout.setLayoutParams(new FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
-        rootLayout.addView(glView, new FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
+    private void buildOverlayUiOn(FrameLayout container) {
+        rootLayout = container;
 
         overlayLayout = new FrameLayout(this);
         overlayLayout.setLayoutParams(new FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
@@ -433,7 +425,6 @@ public class PlayActivity extends AppCompatActivity implements GameRenderer.Call
 
         rootLayout.addView(overlayLayout);
         overlayLayout.setVisibility(View.GONE);
-        setContentView(rootLayout);
         applyOverlayStageLayout();
     }
 
@@ -681,6 +672,23 @@ public class PlayActivity extends AppCompatActivity implements GameRenderer.Call
         stageW = width;
         stageH = height;
         runOnUiThread(this::applyOverlayStageLayout);
+    }
+
+    @Override
+    public void onResourcesReady() {
+        if (loadingProgress != null) loadingView.removeView(loadingProgress);
+        if (loadingText != null) loadingView.removeView(loadingText);
+        new Handler(Looper.getMainLooper()).postDelayed(() -> {
+            if (isFinishing() || isDestroyed()) return;
+            if (renderer == null) return;
+
+            renderer.beginIntro();
+            new Handler(Looper.getMainLooper()).postDelayed(() -> {
+                if (isFinishing() || isDestroyed()) return;
+                if (renderer != null && renderer.isMenuVisible()) return;
+                NativeAudioEngine.start();
+            }, GameRenderer.INTRO_BUFFER_MS);
+        }, 150L);
     }
 
     private void applyImmersiveMode() {
