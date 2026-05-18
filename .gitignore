@@ -3,6 +3,9 @@
 build/
 local.properties
 
+# Claude Code
+.claude/
+
 # IDE
 .idea/
 
