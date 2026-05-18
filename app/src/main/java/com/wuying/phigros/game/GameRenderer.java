@@ -1389,9 +1389,13 @@ public class GameRenderer implements GLSurfaceView.Renderer {
 
     private void commitJudgement(@NonNull Note n, int jr, double diffSec) {
         if (n.judgeResult >= 0) return;
+        // Replay playback: use the exact recorded entry time so effects are placed
+        // at the original timing regardless of the playback device's frame rate.
+        // diffSec = re.ts - n.sect, so n.sect + diffSec = re.ts.
+        double effectTimeSec = replayPlayback ? (n.sect + diffSec) : frameChartTimeSec;
         n.judgeResult = jr;
         n.judgeDiffSec = diffSec;
-        n.judgeTimeSec = frameChartTimeSec;
+        n.judgeTimeSec = effectTimeSec;
         n.preJudge = false;
         n.holdActive = false;
         n.holdPreJudge = false;
@@ -1447,15 +1451,15 @@ public class GameRenderer implements GLSurfaceView.Renderer {
             if (jr == JR_PERFECT) {
                 boolean skip = n.type == GameConstants.NOTE_HOLD;
                 if (!skip && (replayPlayback || (n.type != GameConstants.NOTE_DRAG && n.type != GameConstants.NOTE_FLICK))) {
-                    spawnHitEffect(n, frameChartTimeSec, skinPColor[0], skinPColor[1], skinPColor[2], skinPAlpha, 4);
+                    spawnHitEffect(n, effectTimeSec, skinPColor[0], skinPColor[1], skinPColor[2], skinPAlpha, 4);
                 }
             } else if (jr == JR_GOOD) {
                 boolean skip = n.type == GameConstants.NOTE_HOLD;
                 if (!skip && (replayPlayback || (n.type != GameConstants.NOTE_DRAG && n.type != GameConstants.NOTE_FLICK))) {
-                    spawnHitEffect(n, frameChartTimeSec, skinGColor[0], skinGColor[1], skinGColor[2], skinGAlpha, 3);
+                    spawnHitEffect(n, effectTimeSec, skinGColor[0], skinGColor[1], skinGColor[2], skinGAlpha, 3);
                 }
             } else if (jr == JR_BAD) {
-                spawnBadEffect(n, frameChartTimeSec);
+                spawnBadEffect(n, effectTimeSec);
             }
             // Miss: no effect at all
         }
