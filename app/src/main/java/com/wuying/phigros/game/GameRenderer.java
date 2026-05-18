@@ -504,6 +504,9 @@ public class GameRenderer implements GLSurfaceView.Renderer {
     private boolean replayRecording = false;
     private ReplayData replayRecorderData;
     private final Set<Integer> recordedHoldPressNotes = new HashSet<>();
+    // Earliest touch-down chart time this frame (set on UI thread, read on GL thread).
+    // Uses raw audio time for zero-latency timestamp at the physical touch moment.
+    private volatile double firstTouchChartTimeSec = Double.NaN;
 
     // Replay playback
     private boolean replayPlayback = false;
@@ -923,6 +926,15 @@ public class GameRenderer implements GLSurfaceView.Renderer {
             // so fingers placed during pause don't trigger tap judgments on resume.
             if (!wasPaused) {
                 startedTouchIds.add(id);
+                // Record the exact audio time at physical touch-down.
+                // Uses raw (unsmoothed) playhead to avoid smoothing latency
+                // and because this is called from the UI thread, not the GL thread.
+                if (replayRecording) {
+                    double ct = NativeAudioEngine.getPlayheadSeconds() - chart.offset - userOffsetSec - 0.025;
+                    if (!Double.isFinite(firstTouchChartTimeSec) || ct < firstTouchChartTimeSec) {
+                        firstTouchChartTimeSec = ct;
+                    }
+                }
             }
             flickTrackers.put(id, new FlickTracker(e.getX(idx), e.getY(idx)));
             return;
@@ -1126,6 +1138,7 @@ public class GameRenderer implements GLSurfaceView.Renderer {
         // Reset replay state
         replayEntryIndex = 0;
         recordedHoldPressNotes.clear();
+        firstTouchChartTimeSec = Double.NaN;
         if (replayRecording && replayRecorderData != null) {
             replayRecorderData.entries.clear();
             recordedHoldPressNotes.clear();
@@ -1480,7 +1493,16 @@ public class GameRenderer implements GLSurfaceView.Renderer {
                 re.t = entryType;
                 re.ni = noteIdx;
                 re.j = jr;
-                re.ts = getSmoothedPlayheadSeconds() - chart.offset - userOffsetSec;
+                // Use the earliest touch-down time from this frame if available;
+                // it was recorded right in onTouchEvent at the physical touch moment.
+                // Falls back to the real-time audio position for HOLD_RELEASE
+                // (which has no associated touch-down) or when no touch was recorded.
+                if (entryType == ReplayData.TYPE_HOLD_RELEASE
+                        || !Double.isFinite(firstTouchChartTimeSec)) {
+                    re.ts = getSmoothedPlayheadSeconds() - chart.offset - userOffsetSec;
+                } else {
+                    re.ts = firstTouchChartTimeSec;
+                }
                 replayRecorderData.entries.add(re);
             }
         }
@@ -4916,6 +4938,7 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
             }
         }
         startedTouchIds.clear();
+        firstTouchChartTimeSec = Double.NaN;
     }
 
     private void updateAutoplay(double tChart) {
@@ -4988,7 +5011,9 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
             re.t = ReplayData.TYPE_HOLD_PRESS;
             re.ni = i;
             re.j = n.holdPerfect ? 0 : 1; // PERFECT or GOOD
-            re.ts = getSmoothedPlayheadSeconds() - chart.offset - userOffsetSec;
+            re.ts = Double.isFinite(firstTouchChartTimeSec)
+                    ? firstTouchChartTimeSec
+                    : getSmoothedPlayheadSeconds() - chart.offset - userOffsetSec;
             replayRecorderData.entries.add(re);
         }
     }
@@ -5565,7 +5590,7 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
                                 pe.t = ReplayData.TYPE_HOLD_PRESS;
                                 pe.ni = idx;
                                 pe.j = JR_PERFECT;
-                                pe.ts = getSmoothedPlayheadSeconds() - chart.offset - userOffsetSec;
+                                pe.ts = Double.isFinite(firstTouchChartTimeSec) ? firstTouchChartTimeSec : getSmoothedPlayheadSeconds() - chart.offset - userOffsetSec;
                                 replayRecorderData.entries.add(pe);
                             }
                         }
@@ -5605,7 +5630,7 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
                                 pe.t = ReplayData.TYPE_HOLD_PRESS;
                                 pe.ni = idx;
                                 pe.j = JR_GOOD;
-                                pe.ts = getSmoothedPlayheadSeconds() - chart.offset - userOffsetSec;
+                                pe.ts = Double.isFinite(firstTouchChartTimeSec) ? firstTouchChartTimeSec : getSmoothedPlayheadSeconds() - chart.offset - userOffsetSec;
                                 replayRecorderData.entries.add(pe);
                             }
                         }
