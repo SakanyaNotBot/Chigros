@@ -21,13 +21,16 @@ import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.wuying.phigros.R;
 import com.wuying.phigros.game.PlayResult;
+import com.wuying.phigros.game.ReplayData;
 
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Locale;
@@ -38,6 +41,8 @@ public class ResultActivity extends AppCompatActivity {
     public static final String EXTRA_PLAY_BUNDLE = "extra_play_bundle";
 
     private static final String[] GRADE_FILES = {"F.png", "C.png", "B.png", "A.png", "S.png", "V.png", "FC.png", "AP.png"};
+
+    private String replayCachedPath;
 
     private static int iconIndex(int score, boolean fullCombo) {
         if (score == 1000000) return 7;
@@ -88,6 +93,10 @@ public class ResultActivity extends AppCompatActivity {
 
         Bundle playBundle = getIntent().getBundleExtra(EXTRA_PLAY_BUNDLE);
         PlayResult result = (PlayResult) getIntent().getSerializableExtra(EXTRA_RESULT);
+
+        replayCachedPath = getIntent().getStringExtra(ChartSelectActivity.EXTRA_REPLAY_CACHED_PATH);
+        boolean replayEnabled = getIntent().getBooleanExtra(ChartSelectActivity.EXTRA_REPLAY_ENABLED_FLAG, false);
+        boolean isReplay = getIntent().getBooleanExtra(ChartSelectActivity.EXTRA_IS_REPLAY, false);
 
         String songName = "";
         String difficulty = "";
@@ -165,12 +174,122 @@ public class ResultActivity extends AppCompatActivity {
         if (btnRetryBg != null) applyBlurToView(btnRetryBg, 4f);
         if (btnExitBg != null) applyBlurToView(btnExitBg, 4f);
 
+        // Replay buttons
+        LinearLayout replayButtonsContainer = findViewById(R.id.replay_buttons_container);
+        FrameLayout btnReplayContainer = findViewById(R.id.btn_replay);
+        FrameLayout btnSaveContainer = findViewById(R.id.btn_save);
+        ImageView btnReplayIcon = findViewById(R.id.btn_replay_icon);
+        ImageView btnSaveIcon = findViewById(R.id.btn_save_icon);
+        View btnReplayBg = findViewById(R.id.btn_replay_bg);
+        View btnSaveBg = findViewById(R.id.btn_save_bg);
+
+        if (isReplay && btnRetryContainer != null) {
+            btnRetryContainer.setVisibility(View.GONE);
+        }
+
+        boolean showReplayButtons = false;
+        boolean showSaveOnly = false;
+
+        if (replayEnabled && !isReplay && replayCachedPath != null) {
+            showReplayButtons = true;
+        } else if (isReplay && replayCachedPath != null) {
+            // After replay playback: check if this replay is already saved
+            try {
+                File cachedReplayFile = new File(replayCachedPath);
+                if (cachedReplayFile.exists()) {
+                    ReplayData cachedData = ReplayManager.loadReplayJson(cachedReplayFile);
+                    if (cachedData != null && !ReplayManager.isReplayAlreadySaved(this, cachedData)) {
+                        showReplayButtons = true;
+                        showSaveOnly = true; // Only need save button, replay button is optional
+                    }
+                }
+            } catch (Exception ignored) {}
+        }
+
+        if (showReplayButtons) {
+            if (replayButtonsContainer != null) {
+                replayButtonsContainer.setVisibility(View.VISIBLE);
+            }
+            if (btnReplayIcon != null) loadButtonImage(btnReplayIcon, "replay.png");
+            if (btnSaveIcon != null) loadButtonImage(btnSaveIcon, "save.png");
+            if (btnReplayBg != null) applyBlurToView(btnReplayBg, 4f);
+            if (btnSaveBg != null) applyBlurToView(btnSaveBg, 4f);
+
+            if (btnReplayContainer != null && !showSaveOnly) {
+                btnReplayContainer.setVisibility(View.VISIBLE);
+                btnReplayContainer.setOnClickListener(v -> {
+                    if (playBundle == null) return;
+                    Intent it = new Intent(this, PlayActivity.class);
+                    it.putExtras(playBundle);
+                    it.putExtra(PlayActivity.EXTRA_REPLAY_MODE, true);
+                    it.putExtra(PlayActivity.EXTRA_REPLAY_PATH, replayCachedPath);
+                    startActivity(it);
+                    finish();
+                });
+            } else if (btnReplayContainer != null) {
+                btnReplayContainer.setVisibility(View.GONE);
+            }
+
+            if (btnSaveContainer != null) {
+                btnSaveContainer.setOnClickListener(v -> saveReplay(playBundle));
+            }
+        }
+
         applyPhigrosFont();
 
         if (tvSong != null) tvSong.setIncludeFontPadding(true);
         if (tvDiff != null) tvDiff.setIncludeFontPadding(true);
 
         startEnterAnimation();
+    }
+
+    private void saveReplay(Bundle playBundle) {
+        try {
+            File replayJsonFile = new File(replayCachedPath);
+            if (!replayJsonFile.exists()) {
+                Toast.makeText(this, "回放缓存不存在", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            ReplayData replayData = ReplayManager.loadReplayJson(replayJsonFile);
+            if (replayData == null) {
+                Toast.makeText(this, "回放数据损坏", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            File chartFile = null, musicFile = null, bgFile = null;
+            ReplayManager.InfoJson settings = new ReplayManager.InfoJson();
+            if (playBundle != null) {
+                String cp = playBundle.getString(PlayActivity.EXTRA_CHART_PATH);
+                String mp = playBundle.getString(PlayActivity.EXTRA_MUSIC_PATH);
+                String bp = playBundle.getString(PlayActivity.EXTRA_BG_PATH);
+                if (cp != null) chartFile = new File(cp);
+                if (mp != null) musicFile = new File(mp);
+                if (bp != null) bgFile = new File(bp);
+                settings.aspectRatio = playBundle.getFloat(PlayActivity.EXTRA_ASPECT_RATIO, 0f);
+                settings.keyScale = playBundle.getFloat(PlayActivity.EXTRA_KEY_SCALE, 1.0f);
+                settings.scrollSpeed = playBundle.getFloat(PlayActivity.EXTRA_SCROLL_SPEED, 1.0f);
+                settings.mirrorX = playBundle.getBoolean(PlayActivity.EXTRA_MIRROR_X, false);
+                settings.bgDim = playBundle.getFloat(PlayActivity.EXTRA_BG_DIM, 0.6f);
+                settings.lowRes = playBundle.getBoolean(PlayActivity.EXTRA_LOW_RES, false);
+                settings.antialias = playBundle.getBoolean(PlayActivity.EXTRA_ANTIALIAS, false);
+                settings.showFps = playBundle.getBoolean(PlayActivity.EXTRA_SHOW_FPS, false);
+                settings.showDebug = playBundle.getBoolean(PlayActivity.EXTRA_SHOW_DEBUG, false);
+                settings.multiHighlight = playBundle.getBoolean(PlayActivity.EXTRA_MULTI_HIGHLIGHT, true);
+                settings.apfc = playBundle.getBoolean(PlayActivity.EXTRA_APFC, false);
+                settings.challenge = playBundle.getBoolean(PlayActivity.EXTRA_CHALLENGE, false);
+                settings.musicSpeed = playBundle.getFloat(PlayActivity.EXTRA_MUSIC_SPEED, 1.0f);
+                settings.musicVolPct = (int)(playBundle.getFloat(PlayActivity.EXTRA_MUSIC_VOLUME, 1.0f) * 100);
+                settings.sfxVolPct = (int)(playBundle.getFloat(PlayActivity.EXTRA_SFX_VOLUME, 1.0f) * 100);
+                settings.chartOffsetMs = playBundle.getInt(PlayActivity.EXTRA_CHART_OFFSET_MS, 0);
+            }
+            String uuid = ReplayManager.savePersistedReplay(this, replayData, chartFile, musicFile, bgFile, settings);
+            if (uuid == null) {
+                Toast.makeText(this, "回放已存在，无需重复保存", Toast.LENGTH_SHORT).show();
+            } else {
+                Toast.makeText(this, "回放已保存", Toast.LENGTH_SHORT).show();
+            }
+        } catch (IOException e) {
+            Toast.makeText(this, "保存回放失败：" + e.getMessage(), Toast.LENGTH_SHORT).show();
+        }
     }
 
     private Typeface phigrosTypeface;
@@ -330,6 +449,7 @@ public class ResultActivity extends AppCompatActivity {
         View cardIllustration = findViewById(R.id.card_illustration);
         View lowerBoard = findViewById(R.id.lower_board);
         View buttonsContainer = findViewById(R.id.buttons_container);
+        View replayButtonsContainer = findViewById(R.id.replay_buttons_container);
 
         if (contentContainer == null) return;
 
@@ -423,6 +543,21 @@ public class ResultActivity extends AppCompatActivity {
                     ObjectAnimator alphaAnim = ObjectAnimator.ofFloat(buttonsContainer, "alpha", 0f, 1f);
                     alphaAnim.setDuration(300);
                     ObjectAnimator translationY = ObjectAnimator.ofFloat(buttonsContainer, "translationY", 50f, 0f);
+                    translationY.setDuration(300);
+                    AnimatorSet animatorSet = new AnimatorSet();
+                    animatorSet.playTogether(alphaAnim, translationY);
+                    animatorSet.start();
+                } catch (Throwable ignored) {}
+            }, duration3 + 200);
+        }
+
+        if (replayButtonsContainer != null && replayButtonsContainer.getVisibility() == View.VISIBLE) {
+            replayButtonsContainer.setAlpha(0f);
+            replayButtonsContainer.postDelayed(() -> {
+                try {
+                    ObjectAnimator alphaAnim = ObjectAnimator.ofFloat(replayButtonsContainer, "alpha", 0f, 1f);
+                    alphaAnim.setDuration(300);
+                    ObjectAnimator translationY = ObjectAnimator.ofFloat(replayButtonsContainer, "translationY", 50f, 0f);
                     translationY.setDuration(300);
                     AnimatorSet animatorSet = new AnimatorSet();
                     animatorSet.playTogether(alphaAnim, translationY);

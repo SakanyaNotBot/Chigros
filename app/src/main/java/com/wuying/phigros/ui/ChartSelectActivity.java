@@ -50,6 +50,13 @@ public class ChartSelectActivity extends AppCompatActivity {
     private static final String PREF_SFX_VOL_PCT = "sfx_vol_pct";
     private static final String PREF_MUSIC_SPEED = "music_speed";
     private static final String PREF_SCROLL_SPEED = "scroll_speed";
+    private static final String PREF_REPLAY_ENABLED = "replay_enabled";
+
+    public static final String EXTRA_REPLAY_MODE = "extra_replay_mode";
+    public static final String EXTRA_REPLAY_PATH = "extra_replay_path";
+    public static final String EXTRA_REPLAY_CACHED_PATH = "extra_replay_cached_path";
+    public static final String EXTRA_REPLAY_ENABLED_FLAG = "extra_replay_enabled";
+    public static final String EXTRA_IS_REPLAY = "extra_is_replay";
 
     private SharedPreferences prefs;
 
@@ -81,6 +88,7 @@ public class ChartSelectActivity extends AppCompatActivity {
     private boolean showDebugInfo = false;
     private boolean multiPressHighlight = true;
     private boolean apfcIndicator = false;
+    private boolean replayEnabled = false;
 
     private int musicVolumePct = 100;
     private int sfxVolumePct = 100;
@@ -91,6 +99,7 @@ public class ChartSelectActivity extends AppCompatActivity {
     private ActivityResultLauncher<String[]> pickBgLauncher;
     private ActivityResultLauncher<String[]> pickZipLauncher;
     private ActivityResultLauncher<String[]> pickSkinLauncher;
+    private ActivityResultLauncher<String[]> pickReplayZipLauncher;
 
     private ExtendedFloatingActionButton fabStart;
     private MaterialToolbar toolbar;
@@ -104,6 +113,27 @@ public class ChartSelectActivity extends AppCompatActivity {
         loadPersistedSettings();
         initLaunchers();
         setupPagerUi();
+        handleIncomingIntent();
+    }
+
+    private void handleIncomingIntent() {
+        Intent intent = getIntent();
+        if (intent == null || intent.getData() == null) return;
+        Uri uri = intent.getData();
+        String path = uri.getPath();
+        if (path != null && path.toLowerCase().endsWith(".cgrp")) {
+            try {
+                File zipFile = FileUtils.copyUriToCache(this, uri, "cgrp_import");
+                ReplayManager.importReplayFromCgrp(this, zipFile);
+                toast("回放导入成功");
+                notifyReplayTabChanged();
+                // Switch to replay tab
+                ViewPager2 pager = findViewById(R.id.view_pager);
+                if (pager != null) pager.setCurrentItem(3, true);
+            } catch (IOException e) {
+                toast("导入回放失败：" + e.getMessage());
+            }
+        }
     }
 
     @Override
@@ -150,9 +180,10 @@ public class ChartSelectActivity extends AppCompatActivity {
         SelectPagerAdapter adapter = new SelectPagerAdapter(this);
         pager.setAdapter(adapter);
         new TabLayoutMediator(tabLayout, pager, (tab, position) -> {
-            if (position == 0) tab.setText("铺面");
+            if (position == 0) tab.setText("谱面");
             else if (position == 1) tab.setText("视频");
-            else tab.setText("音频");
+            else if (position == 2) tab.setText("音频");
+            else tab.setText("回放");
         }).attach();
         pager.registerOnPageChangeCallback(new ViewPager2.OnPageChangeCallback() {
             @Override
@@ -169,11 +200,11 @@ public class ChartSelectActivity extends AppCompatActivity {
             updateStartButtonText();
             fabStart.setOnClickListener(v -> {
                 if (!isReadyToStart()) {
-                    toast("请先选择音乐、铺面与背景");
+                    toast("请先选择音乐、谱面与背景");
                     return;
                 }
                 if (TextUtils.isEmpty(songName) || TextUtils.isEmpty(difficulty)) {
-                    toast("请在“铺面”选项卡填写曲名与难度");
+                    toast("请在“谱面”选项卡填写曲名与难度");
                     return;
                 }
                 startPlay();
@@ -183,9 +214,10 @@ public class ChartSelectActivity extends AppCompatActivity {
 
     private void updateToolbarTitle(int position) {
         if (toolbar == null) return;
-        if (position == 0) toolbar.setTitle("铺面设置");
+        if (position == 0) toolbar.setTitle("谱面设置");
         else if (position == 1) toolbar.setTitle("视频设置");
-        else toolbar.setTitle("音频设置");
+        else if (position == 2) toolbar.setTitle("音频设置");
+        else toolbar.setTitle("回放设置");
     }
 
     private void initLaunchers() {
@@ -213,7 +245,7 @@ public class ChartSelectActivity extends AppCompatActivity {
                 chartFile = FileUtils.copyUriToCache(this, uri, "chart");
             } catch (IOException e) {
                 chartFile = null;
-                toast("复制铺面文件失败：" + e.getMessage());
+                toast("复制谱面文件失败：" + e.getMessage());
             }
             tryUpdateSongInfo();
             notifyChartTabFilesChanged();
@@ -280,6 +312,19 @@ public class ChartSelectActivity extends AppCompatActivity {
                 notifyVideoTabSkinChanged();
             } catch (IOException e) {
                 toast("导入皮肤失败：" + e.getMessage());
+            }
+        });
+
+        pickReplayZipLauncher = registerForActivityResult(new ActivityResultContracts.OpenDocument(), uri -> {
+            if (uri == null) return;
+            tryTakePersistableRead(uri);
+            try {
+                File zipFile = FileUtils.copyUriToCache(this, uri, "replay_zip");
+                ReplayManager.importReplayFromCgrp(this, zipFile);
+                toast("回放导入成功");
+                notifyReplayTabChanged();
+            } catch (IOException e) {
+                toast("导入回放失败：" + e.getMessage());
             }
         });
     }
@@ -429,6 +474,10 @@ public class ChartSelectActivity extends AppCompatActivity {
         pickSkinLauncher.launch(new String[]{"application/zip", "application/x-zip-compressed", "application/octet-stream", "*/*"});
     }
 
+    public void launchPickReplayZip() {
+        pickReplayZipLauncher.launch(new String[]{"application/zip", "application/x-zip-compressed", "application/octet-stream", "*/*"});
+    }
+
     public int getSelectedSkinIndex() {
         return SkinManager.getSelectedSkinIndex(this);
     }
@@ -442,6 +491,16 @@ public class ChartSelectActivity extends AppCompatActivity {
             androidx.fragment.app.Fragment f = getSupportFragmentManager().findFragmentByTag("f1");
             if (f instanceof SelectVideoFragment) {
                 ((SelectVideoFragment) f).onResume();
+            }
+        } catch (Exception ignored) {
+        }
+    }
+
+    private void notifyReplayTabChanged() {
+        try {
+            androidx.fragment.app.Fragment f = getSupportFragmentManager().findFragmentByTag("f3");
+            if (f instanceof SelectReplayFragment) {
+                ((SelectReplayFragment) f).refreshFromActivity();
             }
         } catch (Exception ignored) {
         }
@@ -500,6 +559,8 @@ public class ChartSelectActivity extends AppCompatActivity {
     public void setSfxVolumePct(int v)   { sfxVolumePct = clampInt(v, 0, 500); editPrefs().putInt(PREF_SFX_VOL_PCT, sfxVolumePct).apply(); }
     public float getMusicSpeed()         { return musicSpeed; }
     public void setMusicSpeed(float v)   { musicSpeed = clampFinite(v, 0.5f, 2.0f, 1.0f); editPrefs().putFloat(PREF_MUSIC_SPEED, musicSpeed).apply(); }
+    public boolean isReplayEnabled()     { return replayEnabled; }
+    public void setReplayEnabled(boolean v) { replayEnabled = v; editPrefs().putBoolean(PREF_REPLAY_ENABLED, replayEnabled).apply(); }
 
     private void loadPersistedSettings() {
         SharedPreferences p = getPrefs();
@@ -516,6 +577,7 @@ public class ChartSelectActivity extends AppCompatActivity {
         showDebugInfo = p.getBoolean(PREF_SHOW_DEBUG, showDebugInfo);
         multiPressHighlight = p.getBoolean(PREF_MULTI_HIGHLIGHT, multiPressHighlight);
         apfcIndicator = p.getBoolean(PREF_APFC, apfcIndicator);
+        replayEnabled = p.getBoolean(PREF_REPLAY_ENABLED, replayEnabled);
         musicVolumePct = clampInt(p.getInt(PREF_MUSIC_VOL_PCT, musicVolumePct), 0, 500);
         sfxVolumePct = clampInt(p.getInt(PREF_SFX_VOL_PCT, sfxVolumePct), 0, 500);
         musicSpeed = clampFinite(p.getFloat(PREF_MUSIC_SPEED, musicSpeed), 0.5f, 2.0f, 1.0f);

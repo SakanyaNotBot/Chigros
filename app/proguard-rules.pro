@@ -200,6 +200,31 @@
     public static ** valueOf(java.lang.String);
 }
 
+# ---------- Replay data (Jackson serialization) ----------
+-keep class com.wuying.phigros.game.ReplayData {
+    <init>();
+    <fields>;
+}
+-keep class com.wuying.phigros.game.ReplayData$ReplayMeta {
+    <init>();
+    <fields>;
+}
+-keep class com.wuying.phigros.game.ReplayData$ReplayEntry {
+    <init>();
+    <fields>;
+}
+-keep class com.wuying.phigros.ui.ReplayManager {
+    public <methods>;
+}
+-keep class com.wuying.phigros.ui.ReplayManager$ReplayInfo {
+    <fields>;
+}
+-keep class com.wuying.phigros.ui.ReplayManager$InfoJson {
+    <init>();
+    <fields>;
+}
+-keep class com.wuying.phigros.ui.SelectReplayFragment extends androidx.fragment.app.Fragment { *; }
+
 # ---------- Jackson library rules ----------
 -keep class com.fasterxml.jackson.core.** { *; }
 -keep interface com.fasterxml.jackson.core.** { *; }

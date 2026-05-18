@@ -32,6 +32,7 @@ import com.wuying.phigros.game.GameConstants;
 import com.wuying.phigros.game.GameGLSurfaceView;
 import com.wuying.phigros.game.GameRenderer;
 import com.wuying.phigros.game.PlayResult;
+import com.wuying.phigros.game.ReplayData;
 import com.wuying.phigros.util.PcmDecoder;
 import com.wuying.phigros.util.WavDecoder;
 
@@ -65,6 +66,8 @@ public class PlayActivity extends AppCompatActivity implements GameRenderer.Call
     public static final String EXTRA_AUTOPLAY = "extra_autoplay";
     public static final String EXTRA_CHALLENGE = "extra_challenge";
     public static final String EXTRA_SKIN_PATH = "extra_skin_path";
+    public static final String EXTRA_REPLAY_MODE = "extra_replay_mode";
+    public static final String EXTRA_REPLAY_PATH = "extra_replay_path";
 
     private String musicPath;
     private String chartPath;
@@ -88,6 +91,11 @@ public class PlayActivity extends AppCompatActivity implements GameRenderer.Call
     private boolean apfcIndicator = false;
     private boolean autoplay = false;
     private boolean challengeMode = false;
+
+    private boolean replayMode = false;
+    private String replayPath;
+    private ReplayData replayRecorderData;
+    private String replayCachedPath;
 
     private String skinPath;
 
@@ -147,6 +155,8 @@ public class PlayActivity extends AppCompatActivity implements GameRenderer.Call
         autoplay = getIntent().getBooleanExtra(EXTRA_AUTOPLAY, false);
         challengeMode = getIntent().getBooleanExtra(EXTRA_CHALLENGE, false);
         skinPath = getIntent().getStringExtra(EXTRA_SKIN_PATH);
+        replayMode = getIntent().getBooleanExtra(EXTRA_REPLAY_MODE, false);
+        replayPath = getIntent().getStringExtra(EXTRA_REPLAY_PATH);
 
         if (musicSpeed <= 0f) musicSpeed = 1.0f;
         musicSpeed = Math.max(0.5f, Math.min(musicSpeed, 2.0f));
@@ -211,7 +221,7 @@ public class PlayActivity extends AppCompatActivity implements GameRenderer.Call
         tvLp.gravity = Gravity.CENTER_HORIZONTAL | Gravity.CENTER_VERTICAL;
         tvLp.topMargin = (int) (64 * getResources().getDisplayMetrics().density);
         loadingText.setLayoutParams(tvLp);
-        loadingText.setText("加载中...\n(正在解析铺面与解码音频)");
+        loadingText.setText("加载中...\n(正在解析谱面与解码音频)");
 
         root.addView(loadingProgress);
         root.addView(loadingText);
@@ -233,7 +243,7 @@ public class PlayActivity extends AppCompatActivity implements GameRenderer.Call
                 try {
                     return ChartLoader.loadFromFile(chartPath);
                 } catch (OutOfMemoryError oom) {
-                    throw new IOException("铺面文件过大，内存不足无法解析", oom);
+                    throw new IOException("谱面文件过大，内存不足无法解析", oom);
                 }
             });
             parallel.shutdown();
@@ -265,13 +275,43 @@ public class PlayActivity extends AppCompatActivity implements GameRenderer.Call
             NativeAudioEngine.prepareDefaultSfxIfMissing();
 
             float userOffsetSec = chartOffsetMs / 1000.0f;
-            renderer = new GameRenderer(
-                    this, chart, bgPath, songName, difficulty,
-                    totalTimeSec, aspectRatio, keyScale, scrollSpeed,
-                    mirrorX, musicSpeed, userOffsetSec, backgroundDim,
-                    lowResMode, multiPressHighlight, apfcIndicator,
-                    autoplay, challengeMode, showFps, showDebugInfo,
-                    skinPath, this);
+            if (replayMode && replayPath != null) {
+                try {
+                    File replayFile = new File(replayPath);
+                    ReplayData replayData = ReplayManager.loadReplayJson(replayFile);
+                    // Replay playback: do NOT set autoplay (preserves double-tap pause)
+                    renderer = new GameRenderer(
+                            this, chart, bgPath, songName, difficulty,
+                            totalTimeSec, aspectRatio, keyScale, scrollSpeed,
+                            mirrorX, musicSpeed, userOffsetSec, backgroundDim,
+                            lowResMode, multiPressHighlight, apfcIndicator,
+                            false, challengeMode, showFps, showDebugInfo,
+                            skinPath, this);
+                    renderer.setReplayPlayback(replayData);
+                } catch (IOException e) {
+                    runOnUiThread(() -> {
+                        Toast.makeText(this, "加载回放失败：" + e.getMessage(), Toast.LENGTH_SHORT).show();
+                        finish();
+                    });
+                    return;
+                }
+            } else {
+                boolean useAutoplay = autoplay;
+                boolean recordReplay = ReplayManager.isReplayEnabled(this);
+                if (recordReplay && !useAutoplay) {
+                    replayRecorderData = ReplayManager.startRecording();
+                }
+                renderer = new GameRenderer(
+                        this, chart, bgPath, songName, difficulty,
+                        totalTimeSec, aspectRatio, keyScale, scrollSpeed,
+                        mirrorX, musicSpeed, userOffsetSec, backgroundDim,
+                        lowResMode, multiPressHighlight, apfcIndicator,
+                        useAutoplay, challengeMode, showFps, showDebugInfo,
+                        skinPath, this);
+                if (replayRecorderData != null) {
+                    renderer.setReplayRecorder(replayRecorderData);
+                }
+            }
 
             runOnUiThread(() -> {
                 glView = new GameGLSurfaceView(this);
@@ -299,7 +339,7 @@ public class PlayActivity extends AppCompatActivity implements GameRenderer.Call
             } catch (Throwable ignored) {
             }
             final String msg = (e instanceof OutOfMemoryError)
-                    ? "内存不足，无法加载该铺面（文件过大）"
+                    ? "内存不足，无法加载该谱面（文件过大）"
                     : "加载失败：" + e.getMessage();
             runOnUiThread(() -> {
                 Toast.makeText(this, msg, Toast.LENGTH_LONG).show();
@@ -401,7 +441,7 @@ public class PlayActivity extends AppCompatActivity implements GameRenderer.Call
         tvComboLabel = new TextView(this);
         tvComboLabel.setTextColor(Color.WHITE);
         tvComboLabel.setShadowLayer(6f, 0f, 0f, 0x66000000);
-        tvComboLabel.setText(autoplay ? "AUTOPLAY" : "COMBO");
+        tvComboLabel.setText(replayMode ? "REPLAY" : (autoplay ? "AUTOPLAY" : "COMBO"));
         tvComboLabel.setGravity(Gravity.CENTER_HORIZONTAL);
         tvComboLabel.setTextAlignment(View.TEXT_ALIGNMENT_CENTER);
         tvComboLabel.setIncludeFontPadding(false);
@@ -622,6 +662,9 @@ public class PlayActivity extends AppCompatActivity implements GameRenderer.Call
     @Override
     public void onExit() {
         runOnUiThread(() -> {
+            if (!replayMode && replayRecorderData != null) {
+                ReplayManager.clearCachedReplay(this);
+            }
             NativeAudioEngine.stop();
             finish();
         });
@@ -660,6 +703,26 @@ public class PlayActivity extends AppCompatActivity implements GameRenderer.Call
             Intent it = new Intent(this, ResultActivity.class);
             it.putExtra(ResultActivity.EXTRA_PLAY_BUNDLE, playBundle);
             it.putExtra(ResultActivity.EXTRA_RESULT, result);
+
+            // Replay: finish recording and pass to ResultActivity
+            if (replayRecorderData != null && !replayMode) {
+                ReplayManager.finishRecording(replayRecorderData, result, songName, difficulty);
+                try {
+                    File cachedFile = ReplayManager.saveReplayToCache(this, replayRecorderData);
+                    replayCachedPath = cachedFile.getAbsolutePath();
+                } catch (IOException ignored) {}
+            }
+            if (replayCachedPath != null) {
+                it.putExtra(ChartSelectActivity.EXTRA_REPLAY_CACHED_PATH, replayCachedPath);
+                it.putExtra(ChartSelectActivity.EXTRA_REPLAY_ENABLED_FLAG, true);
+            }
+            if (replayMode) {
+                it.putExtra(ChartSelectActivity.EXTRA_IS_REPLAY, true);
+                if (replayPath != null) {
+                    it.putExtra(ChartSelectActivity.EXTRA_REPLAY_CACHED_PATH, replayPath);
+                }
+            }
+
             startActivity(it);
             finish();
         });

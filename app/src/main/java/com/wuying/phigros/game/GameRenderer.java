@@ -77,6 +77,21 @@ public class GameRenderer implements GLSurfaceView.Renderer {
         return menuVisible;
     }
 
+    public void setReplayRecorder(ReplayData data) {
+        this.replayRecorderData = data;
+        this.replayRecording = (data != null);
+    }
+
+    public void setReplayPlayback(ReplayData data) {
+        this.replayPlaybackData = data;
+        this.replayPlayback = (data != null);
+        this.replayEntryIndex = 0;
+    }
+
+    public boolean isReplayPlayback() {
+        return replayPlayback;
+    }
+
     /** Starts or restarts the intro animation buffer. Caller delays audio start accordingly. */
     public void beginIntro() {
         introStarted = true;
@@ -484,6 +499,17 @@ public class GameRenderer implements GLSurfaceView.Renderer {
     private volatile boolean menuVisible = false;
     private volatile boolean needBlurUpdate = false;
     private boolean finishedReported = false;
+
+    // Replay recording
+    private boolean replayRecording = false;
+    private ReplayData replayRecorderData;
+    private final Set<Integer> recordedHoldPressNotes = new HashSet<>();
+
+    // Replay playback
+    private boolean replayPlayback = false;
+    private ReplayData replayPlaybackData;
+    private int replayEntryIndex = 0;
+
     private static final int PAUSE_NONE = 0;
     private static final int PAUSE_MENU = 1;
     private static final int PAUSE_COUNTDOWN = 2;
@@ -857,7 +883,7 @@ public class GameRenderer implements GLSurfaceView.Renderer {
     }
 
     public void onTouchEvent(@NonNull MotionEvent e) {
-        if (autoplay) return;
+        if (autoplay && !replayPlayback) return;
         if (viewW <= 1 || viewH <= 1) return;
 
         final int action = e.getActionMasked();
@@ -1096,6 +1122,14 @@ public class GameRenderer implements GLSurfaceView.Renderer {
         smoothReferenceTimeNs = 0L;
         smoothBiases.clear();
         smoothBiasSum = 0.0;
+
+        // Reset replay state
+        replayEntryIndex = 0;
+        recordedHoldPressNotes.clear();
+        if (replayRecording && replayRecorderData != null) {
+            replayRecorderData.entries.clear();
+            recordedHoldPressNotes.clear();
+        }
 
         visualClockInit = false;
         visualLastFrameNs = 0L;
@@ -1405,26 +1439,46 @@ public class GameRenderer implements GLSurfaceView.Renderer {
             }
         }
 
-        if (!autoplay) {
+        if (!autoplay || replayPlayback) {
             // Spawn effects based on judgment type.
-            // Note: Drag, Flick and Hold effects are already spawned in their respective phases,
-            // so we skip them here to avoid duplicate effects.
-            // - Drag/Flick: effects spawned in Phase 2/3 before commitJudgement
-            // - Hold: head effect in Phase 4, body effects in Phase 5; commitJudgement in Phase 6
-            // should NOT add another effect
+            // During manual judgment, Drag/Flick/Hold effects are spawned in their
+            // respective phases before commitJudgement, so we skip them here.
+            // During replay playback, effects are spawned here for all non-hold types.
             if (jr == JR_PERFECT) {
-                if (n.type != GameConstants.NOTE_DRAG && n.type != GameConstants.NOTE_FLICK && n.type != GameConstants.NOTE_HOLD) {
+                boolean skip = n.type == GameConstants.NOTE_HOLD;
+                if (!skip && (replayPlayback || (n.type != GameConstants.NOTE_DRAG && n.type != GameConstants.NOTE_FLICK))) {
                     spawnHitEffect(n, frameChartTimeSec, skinPColor[0], skinPColor[1], skinPColor[2], skinPAlpha, 4);
                 }
             } else if (jr == JR_GOOD) {
-                if (n.type != GameConstants.NOTE_DRAG && n.type != GameConstants.NOTE_FLICK && n.type != GameConstants.NOTE_HOLD) {
+                boolean skip = n.type == GameConstants.NOTE_HOLD;
+                if (!skip && (replayPlayback || (n.type != GameConstants.NOTE_DRAG && n.type != GameConstants.NOTE_FLICK))) {
                     spawnHitEffect(n, frameChartTimeSec, skinGColor[0], skinGColor[1], skinGColor[2], skinGAlpha, 3);
                 }
             } else if (jr == JR_BAD) {
-                // Bad: tint note and fade out (no hit effect on line)
                 spawnBadEffect(n, frameChartTimeSec);
             }
             // Miss: no effect at all
+        }
+
+        // Replay recording: record every judgment
+        if (replayRecording && replayRecorderData != null) {
+            int entryType;
+            switch (n.type) {
+                case GameConstants.NOTE_TAP:  entryType = ReplayData.TYPE_TAP; break;
+                case GameConstants.NOTE_DRAG: entryType = ReplayData.TYPE_DRAG; break;
+                case GameConstants.NOTE_HOLD: entryType = ReplayData.TYPE_HOLD_RELEASE; break;
+                case GameConstants.NOTE_FLICK: entryType = ReplayData.TYPE_FLICK; break;
+                default: entryType = ReplayData.TYPE_TAP;
+            }
+            int noteIdx = chart.allNotesSorted.indexOf(n);
+            if (noteIdx >= 0) {
+                ReplayData.ReplayEntry re = new ReplayData.ReplayEntry();
+                re.t = entryType;
+                re.ni = noteIdx;
+                re.j = jr;
+                re.ts = getSmoothedPlayheadSeconds() - chart.offset - userOffsetSec;
+                replayRecorderData.entries.add(re);
+            }
         }
     }
 
@@ -1771,7 +1825,11 @@ public class GameRenderer implements GLSurfaceView.Renderer {
                     NativeAudioEngine.stop();
                     if (!finishedReported) {
                         finishedReported = true;
-                        if (callback != null) callback.onFinished(buildPlayResult());
+                        if (replayPlayback && replayPlaybackData != null && replayPlaybackData.meta != null) {
+                            if (callback != null) callback.onFinished(replayPlaybackData.meta.toPlayResult());
+                        } else {
+                            if (callback != null) callback.onFinished(buildPlayResult());
+                        }
                     }
                     return;
                 }
@@ -3187,7 +3245,7 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
 
 
         
-        if (autoplay) drawClickEffects(t);
+        if (autoplay || replayPlayback) drawClickEffects(t);
         drawBadEffects(t);
         drawHitEffects(t);
 
@@ -3523,33 +3581,44 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
         float cx = stageL + stageW * 0.5f;
         float cy = stageT + stageH * 0.5f;
 
-        // AP/FC indicator color (fakeJudgeline.tint)
-        float r, g, b;
+        float r, g, b, a;
         if (apfcIndicator) {
             int good = judgeCounts[1];
             int bad = judgeCounts[2];
             int miss = judgeCounts[3];
 
             if (bad + miss > 0) {
-                r = 1f; g = 1f; b = 1f;
+                r = 1f; g = 1f; b = 1f; a = 1f;
             } else if (good > 0) {
-                r = GameConstants.FC_INDICATOR_COLOR[0];
-                g = GameConstants.FC_INDICATOR_COLOR[1];
-                b = GameConstants.FC_INDICATOR_COLOR[2];
+                if (skinConfig != null && skinConfig.colorGood != null) {
+                    r = skinGColor[0]; g = skinGColor[1]; b = skinGColor[2]; a = skinGAlpha;
+                } else {
+                    r = GameConstants.FC_INDICATOR_COLOR[0];
+                    g = GameConstants.FC_INDICATOR_COLOR[1];
+                    b = GameConstants.FC_INDICATOR_COLOR[2];
+                    a = 1f;
+                }
             } else {
-                r = GameConstants.AP_INDICATOR_COLOR[0];
-                g = GameConstants.AP_INDICATOR_COLOR[1];
-                b = GameConstants.AP_INDICATOR_COLOR[2];
+                if (skinConfig != null && skinConfig.colorPerfect != null) {
+                    r = skinPColor[0]; g = skinPColor[1]; b = skinPColor[2]; a = skinPAlpha;
+                } else {
+                    r = GameConstants.AP_INDICATOR_COLOR[0];
+                    g = GameConstants.AP_INDICATOR_COLOR[1];
+                    b = GameConstants.AP_INDICATOR_COLOR[2];
+                    a = 1f;
+                }
             }
+        } else if (skinConfig != null && skinConfig.colorPerfect != null) {
+            r = skinPColor[0]; g = skinPColor[1]; b = skinPColor[2]; a = skinPAlpha;
         } else {
-            r = 1f; g = 1f; b = 1f;
+            r = 1f; g = 1f; b = 1f; a = 1f;
         }
 
         float p0x = cx - halfLen;
         float p0y = cy;
         float p1x = cx + halfLen;
         float p1y = cy;
-        drawLine(p0x, p0y, p1x, p1y, lineWidth, r, g, b, 1f);
+        drawLine(p0x, p0y, p1x, p1y, lineWidth, r, g, b, a);
     }
 
     private void drawJudgeLineVisual(@NonNull JudgeLine line,
@@ -3575,6 +3644,7 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
         float r = st.colorR;
         float g = st.colorG;
         float b = st.colorB;
+        float skinAlpha = 1f;
 
         boolean hasTexture = (line.texture != null && !line.texture.isEmpty());
         boolean hasText = (st.text != null && !st.text.isEmpty());
@@ -3592,18 +3662,29 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
                     g = 1f;
                     b = 1f;
                 } else if (good > 0) {
-                    r = GameConstants.FC_INDICATOR_COLOR[0];
-                    g = GameConstants.FC_INDICATOR_COLOR[1];
-                    b = GameConstants.FC_INDICATOR_COLOR[2];
+                    if (skinConfig != null && skinConfig.colorGood != null) {
+                        r = skinGColor[0]; g = skinGColor[1]; b = skinGColor[2];
+                        skinAlpha = skinGAlpha;
+                    } else {
+                        r = GameConstants.FC_INDICATOR_COLOR[0];
+                        g = GameConstants.FC_INDICATOR_COLOR[1];
+                        b = GameConstants.FC_INDICATOR_COLOR[2];
+                    }
                 } else {
-                    r = GameConstants.AP_INDICATOR_COLOR[0];
-                    g = GameConstants.AP_INDICATOR_COLOR[1];
-                    b = GameConstants.AP_INDICATOR_COLOR[2];
+                    if (skinConfig != null && skinConfig.colorPerfect != null) {
+                        r = skinPColor[0]; g = skinPColor[1]; b = skinPColor[2];
+                        skinAlpha = skinPAlpha;
+                    } else {
+                        r = GameConstants.AP_INDICATOR_COLOR[0];
+                        g = GameConstants.AP_INDICATOR_COLOR[1];
+                        b = GameConstants.AP_INDICATOR_COLOR[2];
+                    }
                 }
             } else if (skinConfig != null && skinConfig.colorPerfect != null) {
                 r = skinPColor[0];
                 g = skinPColor[1];
                 b = skinPColor[2];
+                skinAlpha = skinPAlpha;
             } else {
                 r = 1f;
                 g = 1f;
@@ -3739,7 +3820,7 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
         float p0y = lineY + halfLen * sinLine;
         float p1x = lineX - halfLen * cosLine;
         float p1y = lineY - halfLen * sinLine;
-        drawLine(p0x, p0y, p1x, p1y, width, r, g, b, alpha);
+        drawLine(p0x, p0y, p1x, p1y, width, r, g, b, alpha * skinAlpha);
     }
 
     private Texture getOrLoadFileTexture(@NonNull String path) {
@@ -4216,7 +4297,7 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
                 hudLastComboValue = combo;
             }
             // Combo label text can be driven by attachUI (UIElement::Combo) text events.
-            String comboLabel = autoplay ? "AUTOPLAY" : "COMBO";
+            String comboLabel = replayPlayback ? "REPLAY" : (autoplay ? "AUTOPLAY" : "COMBO");
             if (chart != null) {
                 double ct = getSmoothedPlayheadSeconds() - chart.offset - userOffsetSec;
                 float sa = (stageH > 1e-6f) ? (stageW / stageH) : (16f / 9f);
@@ -4820,10 +4901,15 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
     private void updateGameplay(double tChart) {
         frameChartTimeSec = tChart;
         framePlayTimeSec = getSmoothedPlayheadSeconds();
-        if (autoplay) {
+        if (replayPlayback && replayPlaybackData != null) {
+            updateReplayPlayback(tChart);
+        } else if (autoplay) {
             updateAutoplay(tChart);
         } else {
             updateJudgeManualPhi(tChart);
+            if (replayRecording && replayRecorderData != null) {
+                recordNewHoldPresses();
+            }
         }
         startedTouchIds.clear();
     }
@@ -4882,6 +4968,105 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
                 n.holdActive = false;
                 n.holdPreJudge = false;
                 commitJudgement(n, JR_PERFECT, 0.0);
+            }
+        }
+    }
+
+    private void recordNewHoldPresses() {
+        List<Note> notes = chart.allNotesSorted;
+        for (int i = 0; i < notes.size(); i++) {
+            Note n = notes.get(i);
+            if (n.type != GameConstants.NOTE_HOLD) continue;
+            if (!n.holdActive) continue;
+            if (recordedHoldPressNotes.contains(i)) continue;
+            recordedHoldPressNotes.add(i);
+            ReplayData.ReplayEntry re = new ReplayData.ReplayEntry();
+            re.t = ReplayData.TYPE_HOLD_PRESS;
+            re.ni = i;
+            re.j = n.holdPerfect ? 0 : 1; // PERFECT or GOOD
+            re.ts = getSmoothedPlayheadSeconds() - chart.offset - userOffsetSec;
+            replayRecorderData.entries.add(re);
+        }
+    }
+
+    private void updateReplayPlayback(double tChart) {
+        List<Note> notes = chart.allNotesSorted;
+        List<ReplayData.ReplayEntry> entries = replayPlaybackData.entries;
+
+        while (replayEntryIndex < entries.size()) {
+            ReplayData.ReplayEntry re = entries.get(replayEntryIndex);
+            if (re.ts <= tChart) {
+                if (re.ni >= 0 && re.ni < notes.size()) {
+                    Note n = notes.get(re.ni);
+                    if (n.judgeResult < 0) {
+                        if (n.type == GameConstants.NOTE_HOLD) {
+                            if (re.t == ReplayData.TYPE_HOLD_PRESS) {
+                                if (!n.holdActive) {
+                                    n.holdActive = true;
+                                    n.holdPerfect = (re.j == 0);
+                                    n.holdPreJudge = false;
+                                    n.holdUpTimeSec = Double.POSITIVE_INFINITY;
+                                    n.holdDiffSec = re.ts - n.sect;
+                                    n.safeFrame = 2;
+                                    JudgeLine ml = n.master;
+                                    double bpm0 = (ml != null && ml.bpm > 0) ? ml.bpm : 120.0;
+                                    double interval0 = (0.5 * 60.0 / bpm0) / Math.max(0.001f, musicSpeed);
+                                    n.holdFxAtSec = (n.holdEndTime - re.ts >= 1.5 * interval0)
+                                            ? re.ts + interval0
+                                            : Double.POSITIVE_INFINITY;
+                                    n.clicked = true;
+                                    n.holdTapTimeMs = System.nanoTime() / 1_000_000L;
+                                    n.holdBroken = false;
+                                    NativeAudioEngine.triggerSfx(GameConstants.NOTE_TAP);
+                                    if (re.j == 0) {
+                                        spawnHoldHeadHitEffect(n, re.ts, skinPColor[0], skinPColor[1], skinPColor[2], skinPAlpha, 4);
+                                    } else {
+                                        spawnHoldHeadHitEffect(n, re.ts, skinGColor[0], skinGColor[1], skinGColor[2], skinGAlpha, 3);
+                                    }
+                                }
+                            } else {
+                                // HOLD_RELEASE
+                                if (re.j == JR_PERFECT || re.j == JR_GOOD) {
+                                    n.holdPreJudge = true;
+                                    // keep holdActive=true so drawClickEffects continues
+                                    // drawing body effects until holdEndTime.
+                                    // holdPerfect is kept as-is from HOLD_PRESS
+                                    // so body effect colors match the head judgment.
+                                } else {
+                                    n.holdActive = false;
+                                    n.holdPreJudge = false;
+                                    commitJudgement(n, re.j, re.ts - n.sect);
+                                }
+                            }
+                        } else {
+                            commitJudgement(n, re.j, re.ts - n.sect);
+                        }
+                    }
+                }
+                replayEntryIndex++;
+            } else {
+                break;
+            }
+        }
+
+        for (Note n : notes) {
+            if (n == null || n.type != GameConstants.NOTE_HOLD) continue;
+            if (!n.holdActive || n.judgeResult >= 0) continue;
+            JudgeLine masterLine = n.master;
+            double bpm = (masterLine != null && masterLine.bpm > 0) ? masterLine.bpm : 120.0;
+            double interval = (0.5 * 60.0 / bpm) / Math.max(0.001f, musicSpeed);
+            if (!Double.isFinite(n.holdFxAtSec)) n.holdFxAtSec = tChart + interval;
+            while (tChart >= n.holdFxAtSec && n.holdFxAtSec <= n.holdEndTime) {
+                n.holdFxAtSec += interval;
+            }
+            // holdPreJudge is set by PERFECT/GOOD HOLD_RELEASE.
+            // drawClickEffects continues drawing body effects past this
+            // point (see judgeResult check there) — so we finalize
+            // only when holdEndTime is reached.
+            if (n.holdPreJudge && tChart >= n.holdEndTime) {
+                n.holdActive = false;
+                n.holdPreJudge = false;
+                commitJudgement(n, n.holdPerfect ? JR_PERFECT : JR_GOOD, n.holdDiffSec);
             }
         }
     }
@@ -5358,7 +5543,7 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
                         double interval0 = (HOLD_PARTICLE_INTERVAL_BEATS * 60.0 / bpm0) / Math.max(0.001f, musicSpeed);
                         // Only schedule body effects if, after the first interval
                         // delay, at least one more full interval remains.
-                        note.holdFxAtSec = (note.holdEndTime - tChart >= 2 * interval0)
+                        note.holdFxAtSec = (note.holdEndTime - tChart >= 1.5 * interval0)
                                 ? tChart + interval0
                                 : Double.POSITIVE_INFINITY;
                         note.clicked = true;
@@ -5366,6 +5551,19 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
                         note.holdBroken = false;
                         if (holdHeadSpawned.add(note)) {
                             spawnHoldHeadHitEffect(note, tChart, skinPColor[0], skinPColor[1], skinPColor[2], skinPAlpha, 4);
+                        }
+                        // Record HOLD_PRESS immediately so short holds aren't missed
+                        if (replayRecording && replayRecorderData != null) {
+                            int idx = chart.allNotesSorted.indexOf(note);
+                            if (idx >= 0 && !recordedHoldPressNotes.contains(idx)) {
+                                recordedHoldPressNotes.add(idx);
+                                ReplayData.ReplayEntry pe = new ReplayData.ReplayEntry();
+                                pe.t = ReplayData.TYPE_HOLD_PRESS;
+                                pe.ni = idx;
+                                pe.j = JR_PERFECT;
+                                pe.ts = getSmoothedPlayheadSeconds() - chart.offset - userOffsetSec;
+                                replayRecorderData.entries.add(pe);
+                            }
                         }
                     }
                     note.statOffset = deltaTime;
@@ -5385,7 +5583,7 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
                         JudgeLine masterLine0 = note.master;
                         double bpm0 = (masterLine0 != null && masterLine0.bpm > 0) ? masterLine0.bpm : 120.0;
                         double interval0 = (HOLD_PARTICLE_INTERVAL_BEATS * 60.0 / bpm0) / Math.max(0.001f, musicSpeed);
-                        note.holdFxAtSec = (note.holdEndTime - tChart >= 2 * interval0)
+                        note.holdFxAtSec = (note.holdEndTime - tChart >= 1.5 * interval0)
                                 ? tChart + interval0
                                 : Double.POSITIVE_INFINITY;
                         note.clicked = true;
@@ -5393,6 +5591,19 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
                         note.holdBroken = false;
                         if (holdHeadSpawned.add(note)) {
                             spawnHoldHeadHitEffect(note, tChart, skinGColor[0], skinGColor[1], skinGColor[2], skinGAlpha, 3);
+                        }
+                        // Record HOLD_PRESS immediately so short holds aren't missed
+                        if (replayRecording && replayRecorderData != null) {
+                            int idx = chart.allNotesSorted.indexOf(note);
+                            if (idx >= 0 && !recordedHoldPressNotes.contains(idx)) {
+                                recordedHoldPressNotes.add(idx);
+                                ReplayData.ReplayEntry pe = new ReplayData.ReplayEntry();
+                                pe.t = ReplayData.TYPE_HOLD_PRESS;
+                                pe.ni = idx;
+                                pe.j = JR_GOOD;
+                                pe.ts = getSmoothedPlayheadSeconds() - chart.offset - userOffsetSec;
+                                replayRecorderData.entries.add(pe);
+                            }
                         }
                     }
                     note.statOffset = deltaTime;
@@ -5446,7 +5657,7 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
             if (!Double.isFinite(n.holdFxAtSec)) n.holdFxAtSec = tChart + interval;
 
             while (tChart >= n.holdFxAtSec) {
-                if (n.holdFxAtSec + interval <= n.holdEndTime) {
+                if (n.holdFxAtSec + interval * 0.5 <= n.holdEndTime) {
                     if (n.holdPerfect) {
                         spawnHitEffect(n, n.holdFxAtSec, skinPColor[0], skinPColor[1], skinPColor[2], skinPAlpha, 4);
                     } else {
@@ -5468,7 +5679,7 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
             // skipped (holdFxAtSec was set to +Inf in Phase 5).
             if (n.holdPreJudge && Double.isFinite(n.holdFxAtSec)
                     && tChart >= n.holdEndTime - HOLD_TAIL_EARLY_SETTLE) {
-                while (n.holdFxAtSec + interval <= n.holdEndTime) {
+                while (n.holdFxAtSec + interval * 0.5 <= n.holdEndTime) {
                     if (n.holdPerfect) {
                         spawnHitEffect(n, n.holdFxAtSec, skinPColor[0], skinPColor[1], skinPColor[2], skinPAlpha, 4);
                     } else {
@@ -6142,6 +6353,29 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
             float v1 = (float) (cy + 1) / (float) rows - halfV;
 
             if (item.note == null || item.note.master == null) continue;
+            // Replay: match manual-play hold body effect timing constraints.
+            // Phase 5 short-hold guard (holdFxAtSec=+Inf when remaining < 1.5*interval)
+            // and Phase 6 boundary (last spawn at holdEndTime - 0.5*interval).
+            if (replayPlayback && item.note.type == GameConstants.NOTE_HOLD) {
+                JudgeLine ml2 = item.note.master;
+                double bpm2 = (ml2 != null && ml2.bpm > 0) ? ml2.bpm : 120.0;
+                double interval2 = (0.5 * 60.0 / bpm2) / Math.max(0.001f, musicSpeed);
+                if (item.note.holdEndTime - item.note.sect < 1.5 * interval2) continue;
+                if (item.timeSec + interval2 * 0.5 > item.note.holdEndTime) continue;
+            }
+            // Skip click effects for already-judged notes.
+            // During replay playback, PERFECT/GOOD hold effects are allowed
+            // to continue past commitJudgement so their full animation plays out.
+            // MISS holds and all non-replay judgments stop immediately.
+            if (replayPlayback && item.note.type == GameConstants.NOTE_HOLD) {
+                if (item.note.judgeResult == JR_MISS) continue;
+            } else if (item.note.judgeResult >= 0) {
+                continue;
+            }
+            if (item.note.type == GameConstants.NOTE_HOLD && !item.note.holdActive && item.note.holdBroken) continue;
+            // During replay, commitJudgement/spawnHoldHeadHitEffect already spawn
+            // the note-head effect — skip this duplicate click effect at note.sect
+            if (replayPlayback && Math.abs(item.timeSec - item.note.sect) < 0.001) continue;
 
             float x, y;
             float lineRotDeg;
@@ -6170,12 +6404,14 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
             }
 
             float sheetRot = skinHitFxRotate ? lineRotDeg : 0f;
-            float tintR = skinHitFxTinted ? skinPColor[0] : 1f;
-            float tintG = skinHitFxTinted ? skinPColor[1] : 1f;
-            float tintB = skinHitFxTinted ? skinPColor[2] : 1f;
+            boolean isPerfectColor = !item.note.isHold || item.note.holdPerfect;
+            float tintR = skinHitFxTinted ? (isPerfectColor ? skinPColor[0] : skinGColor[0]) : 1f;
+            float tintG = skinHitFxTinted ? (isPerfectColor ? skinPColor[1] : skinGColor[1]) : 1f;
+            float tintB = skinHitFxTinted ? (isPerfectColor ? skinPColor[2] : skinGColor[2]) : 1f;
+            float tintA = isPerfectColor ? skinPAlpha : skinGAlpha;
 
             addQuadToBatch(x, y, effectSize, effectSize, sheetRot,
-                    tintR, tintG, tintB, skinPAlpha,
+                    tintR, tintG, tintB, tintA,
                     u0, v0, u1, v1);
 
             if (batchCount >= MAX_BATCH_QUADS) flushHitFxBatch(texHitFx);
@@ -6201,6 +6437,23 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
             double elapsed = tVis - item.animStartSec;
             if (elapsed < 0.0) continue;
             if (elapsed > dur) continue;
+            // Mirror the skip conditions from the spritesheet pass above
+            if (item.note == null || item.note.master == null) continue;
+            if (replayPlayback && item.note.type == GameConstants.NOTE_HOLD) {
+                JudgeLine ml2 = item.note.master;
+                double bpm2 = (ml2 != null && ml2.bpm > 0) ? ml2.bpm : 120.0;
+                double interval2 = (0.5 * 60.0 / bpm2) / Math.max(0.001f, musicSpeed);
+                if (item.note.holdEndTime - item.note.sect < 1.5 * interval2) continue;
+                if (item.timeSec + interval2 * 0.5 > item.note.holdEndTime) continue;
+            }
+            if (replayPlayback && item.note.type == GameConstants.NOTE_HOLD) {
+                if (item.note.judgeResult == JR_MISS) continue;
+            } else if (item.note.judgeResult >= 0) {
+                continue;
+            }
+            if (item.note.type == GameConstants.NOTE_HOLD && !item.note.holdActive && item.note.holdBroken) continue;
+            if (replayPlayback && Math.abs(item.timeSec - item.note.sect) < 0.001) continue;
+            if (!item.positionCached) continue;
 
             float p = (float) (elapsed / dur);
             p = MathUtils.clamp(p, 0f, 1f);
@@ -6217,8 +6470,12 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
                 float rx = x + (float) (r * Math.cos(prad));
                 float ry = y + (float) (r * Math.sin(prad));
                 
+                boolean pfColor = !item.note.isHold || item.note.holdPerfect;
+                float pr = pfColor ? skinPColor[0] : skinGColor[0];
+                float pg = pfColor ? skinPColor[1] : skinGColor[1];
+                float pb = pfColor ? skinPColor[2] : skinGColor[2];
                 addQuadToBatch(rx, ry, size, size, 0f,
-                        skinPColor[0], skinPColor[1], skinPColor[2], alpha,
+                        pr, pg, pb, alpha,
                         0f, 0f, 1f, 1f);
                 
                 if (batchCount >= MAX_BATCH_QUADS) flushBatch(texWhite);

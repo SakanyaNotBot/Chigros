@@ -116,14 +116,14 @@ public class SelectChartFragment extends Fragment {
             if (music != null || chart != null || bg != null) {
                 s = "已载入："
                         + (music != null ? " 音乐" : "")
-                        + (chart != null ? " 铺面" : "")
+                        + (chart != null ? " 谱面" : "")
                         + (bg != null ? " 背景" : "");
             }
             tvPackStatus.setText(s);
         }
 
         if (tvMusic != null) tvMusic.setText("音乐：" + (music == null ? "未选择" : music.getName()));
-        if (tvChart != null) tvChart.setText("铺面：" + (chart == null ? "未选择" : chart.getName()));
+        if (tvChart != null) tvChart.setText("谱面：" + (chart == null ? "未选择" : chart.getName()));
         if (tvBg != null) tvBg.setText("背景：" + (bg == null ? "未选择" : bg.getName()));
 
         boolean enableInfo = (chart != null && chart.exists());

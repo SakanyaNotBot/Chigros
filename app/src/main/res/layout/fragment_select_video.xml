@@ -192,7 +192,7 @@
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="铺面流速设置"
+                    android:text="谱面流速设置"
                     android:textStyle="bold" />
 
                 <com.google.android.material.textfield.TextInputLayout

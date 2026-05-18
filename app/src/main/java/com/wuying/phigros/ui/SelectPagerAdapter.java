@@ -16,11 +16,12 @@ public class SelectPagerAdapter extends FragmentStateAdapter {
     public Fragment createFragment(int position) {
         if (position == 0) return new SelectChartFragment();
         if (position == 1) return new SelectVideoFragment();
-        return new SelectAudioFragment();
+        if (position == 2) return new SelectAudioFragment();
+        return new SelectReplayFragment();
     }
 
     @Override
     public int getItemCount() {
-        return 3;
+        return 4;
     }
 }
