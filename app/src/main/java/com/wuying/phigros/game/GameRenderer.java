@@ -11,6 +11,7 @@ import android.graphics.Typeface;
 import android.opengl.GLES20;
 import android.opengl.GLSurfaceView;
 import android.opengl.Matrix;
+import android.os.SystemClock;
 import android.view.MotionEvent;
 
 import android.util.Log;
@@ -504,9 +505,11 @@ public class GameRenderer implements GLSurfaceView.Renderer {
     private boolean replayRecording = false;
     private ReplayData replayRecorderData;
     private final Set<Integer> recordedHoldPressNotes = new HashSet<>();
-    // Earliest touch-down chart time this frame (set on UI thread, read on GL thread).
-    // Uses raw audio time for zero-latency timestamp at the physical touch moment.
+    // Earliest touch-down chart time this frame, mapped from MotionEvent.getEventTime()
+    // onto the same smoothed chart-time axis used by rendering and judgment.
     private volatile double firstTouchChartTimeSec = Double.NaN;
+    private double replayClockRefChartTimeSec = Double.NaN;
+    private long replayClockRefUptimeMs = -1L;
 
     // Replay playback
     private boolean replayPlayback = false;
@@ -926,11 +929,8 @@ public class GameRenderer implements GLSurfaceView.Renderer {
             // so fingers placed during pause don't trigger tap judgments on resume.
             if (!wasPaused) {
                 startedTouchIds.add(id);
-                // Record the exact audio time at physical touch-down.
-                // Uses raw (unsmoothed) playhead to avoid smoothing latency
-                // and because this is called from the UI thread, not the GL thread.
                 if (replayRecording) {
-                    double ct = NativeAudioEngine.getPlayheadSeconds() - chart.offset - userOffsetSec - 0.025;
+                    double ct = eventChartTimeSec(e.getEventTime());
                     if (!Double.isFinite(firstTouchChartTimeSec) || ct < firstTouchChartTimeSec) {
                         firstTouchChartTimeSec = ct;
                     }
@@ -1139,6 +1139,8 @@ public class GameRenderer implements GLSurfaceView.Renderer {
         replayEntryIndex = 0;
         recordedHoldPressNotes.clear();
         firstTouchChartTimeSec = Double.NaN;
+        replayClockRefChartTimeSec = Double.NaN;
+        replayClockRefUptimeMs = -1L;
         if (replayRecording && replayRecorderData != null) {
             replayRecorderData.entries.clear();
             recordedHoldPressNotes.clear();
@@ -1499,7 +1501,7 @@ public class GameRenderer implements GLSurfaceView.Renderer {
                 // (which has no associated touch-down) or when no touch was recorded.
                 if (entryType == ReplayData.TYPE_HOLD_RELEASE
                         || !Double.isFinite(firstTouchChartTimeSec)) {
-                    re.ts = getSmoothedPlayheadSeconds() - chart.offset - userOffsetSec;
+                    re.ts = replayRecordNowChartTimeSec();
                 } else {
                     re.ts = firstTouchChartTimeSec;
                 }
@@ -4927,6 +4929,7 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
     private void updateGameplay(double tChart) {
         frameChartTimeSec = tChart;
         framePlayTimeSec = getSmoothedPlayheadSeconds();
+        updateReplayClockReference(tChart);
         if (replayPlayback && replayPlaybackData != null) {
             updateReplayPlayback(tChart);
         } else if (autoplay) {
@@ -4939,6 +4942,26 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
         }
         startedTouchIds.clear();
         firstTouchChartTimeSec = Double.NaN;
+    }
+
+    private void updateReplayClockReference(double tChart) {
+        if (!replayRecording) return;
+        replayClockRefChartTimeSec = tChart;
+        replayClockRefUptimeMs = SystemClock.uptimeMillis();
+    }
+
+    private double replayRecordNowChartTimeSec() {
+        if (Double.isFinite(frameChartTimeSec)) return frameChartTimeSec;
+        return getSmoothedPlayheadSeconds() - chart.offset - userOffsetSec;
+    }
+
+    private double eventChartTimeSec(long eventTimeMs) {
+        if (Double.isFinite(replayClockRefChartTimeSec) && replayClockRefUptimeMs > 0L) {
+            double dt = (eventTimeMs - replayClockRefUptimeMs) * 0.001 * Math.max(0.001f, musicSpeed);
+            double out = replayClockRefChartTimeSec + dt;
+            if (Double.isFinite(out)) return out;
+        }
+        return replayRecordNowChartTimeSec();
     }
 
     private void updateAutoplay(double tChart) {
@@ -5013,7 +5036,7 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
             re.j = n.holdPerfect ? 0 : 1; // PERFECT or GOOD
             re.ts = Double.isFinite(firstTouchChartTimeSec)
                     ? firstTouchChartTimeSec
-                    : getSmoothedPlayheadSeconds() - chart.offset - userOffsetSec;
+                    : replayRecordNowChartTimeSec();
             replayRecorderData.entries.add(re);
         }
     }
@@ -5590,7 +5613,7 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
                                 pe.t = ReplayData.TYPE_HOLD_PRESS;
                                 pe.ni = idx;
                                 pe.j = JR_PERFECT;
-                                pe.ts = Double.isFinite(firstTouchChartTimeSec) ? firstTouchChartTimeSec : getSmoothedPlayheadSeconds() - chart.offset - userOffsetSec;
+                                pe.ts = Double.isFinite(firstTouchChartTimeSec) ? firstTouchChartTimeSec : replayRecordNowChartTimeSec();
                                 replayRecorderData.entries.add(pe);
                             }
                         }
@@ -5630,7 +5653,7 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
                                 pe.t = ReplayData.TYPE_HOLD_PRESS;
                                 pe.ni = idx;
                                 pe.j = JR_GOOD;
-                                pe.ts = Double.isFinite(firstTouchChartTimeSec) ? firstTouchChartTimeSec : getSmoothedPlayheadSeconds() - chart.offset - userOffsetSec;
+                                pe.ts = Double.isFinite(firstTouchChartTimeSec) ? firstTouchChartTimeSec : replayRecordNowChartTimeSec();
                                 replayRecorderData.entries.add(pe);
                             }
                         }
@@ -6338,6 +6361,10 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
         while (clickEffectIndex < eff.size()) {
             ClickEffectItem e0 = eff.get(clickEffectIndex);
             if (e0.timeSec > tChart) break;
+            if (shouldSkipReplayClickEffect(e0)) {
+                clickEffectIndex++;
+                continue;
+            }
             if (!e0.animStartCached) {
                 e0.animStartCached = true;
                 e0.animStartSec = (float) tVis;
@@ -6357,6 +6384,7 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
         for (int i = clickEffectIndex; i < eff.size(); i++) {
             ClickEffectItem item = eff.get(i);
             if (item.timeSec > tChart) break;
+            if (shouldSkipReplayClickEffect(item)) continue;
             if (!item.animStartCached) {
                 item.animStartCached = true;
                 item.animStartSec = (float) tVis;
@@ -6392,16 +6420,8 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
                 if (item.note.holdEndTime - item.note.sect < 1.5 * interval2) continue;
                 if (item.timeSec + interval2 * 0.5 > item.note.holdEndTime) continue;
             }
-            // Skip click effects for already-judged notes.
-            // During replay playback, PERFECT/GOOD hold effects are allowed
-            // to continue past commitJudgement so their full animation plays out.
-            // MISS holds and all non-replay judgments stop immediately.
-            if (replayPlayback && item.note.type == GameConstants.NOTE_HOLD) {
-                if (item.note.judgeResult == JR_MISS) continue;
-            } else if (item.note.judgeResult >= 0) {
-                continue;
-            }
-            if (item.note.type == GameConstants.NOTE_HOLD && !item.note.holdActive && item.note.holdBroken) continue;
+            // Replay skip policy is handled before animStartCached is set.
+            // Already-started HOLD body effects are allowed to finish naturally.
             // During replay, commitJudgement/spawnHoldHeadHitEffect already spawn
             // the note-head effect — skip this duplicate click effect at note.sect
             if (replayPlayback && Math.abs(item.timeSec - item.note.sect) < 0.001) continue;
@@ -6459,6 +6479,7 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
         for (int i = clickEffectIndex; i < eff.size(); i++) {
             ClickEffectItem item = eff.get(i);
             if (item.timeSec > tChart) break;
+            if (shouldSkipReplayClickEffect(item)) continue;
             if (!item.animStartCached) {
                 item.animStartCached = true;
                 item.animStartSec = (float) tVis;
@@ -6475,12 +6496,6 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
                 if (item.note.holdEndTime - item.note.sect < 1.5 * interval2) continue;
                 if (item.timeSec + interval2 * 0.5 > item.note.holdEndTime) continue;
             }
-            if (replayPlayback && item.note.type == GameConstants.NOTE_HOLD) {
-                if (item.note.judgeResult == JR_MISS) continue;
-            } else if (item.note.judgeResult >= 0) {
-                continue;
-            }
-            if (item.note.type == GameConstants.NOTE_HOLD && !item.note.holdActive && item.note.holdBroken) continue;
             if (replayPlayback && Math.abs(item.timeSec - item.note.sect) < 0.001) continue;
             if (!item.positionCached) continue;
 
@@ -6512,6 +6527,17 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
         }
         flushBatch(texWhite);
         } // !skinHideParticles
+    }
+
+    private boolean shouldSkipReplayClickEffect(@NonNull ClickEffectItem item) {
+        if (!replayPlayback || item.note == null) return false;
+        Note note = item.note;
+        if (note.type == GameConstants.NOTE_HOLD) {
+            if (Math.abs(item.timeSec - note.sect) < 0.001) return true;
+            if (item.animStartCached) return false;
+            return note.judgeResult == JR_MISS || (!note.holdActive && note.holdBroken);
+        }
+        return note.judgeResult >= 0;
     }
 
     private void drawBadEffects(double tChart) {

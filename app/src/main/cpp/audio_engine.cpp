@@ -18,11 +18,16 @@ constexpr int kOutputChannels = 2;
 
 struct SfxEventQueue {
     static constexpr int kCapacity = 1024;
+    struct Event {
+        int type = 1;
+        int64_t targetOutputFrame = 0;
+    };
+
     std::atomic<int> w{0};
     std::atomic<int> r{0};
-    int events[kCapacity];
+    Event events[kCapacity];
 
-    void push(int type) {
+    void push(int type, int64_t targetOutputFrame) {
         int w0 = w.load(std::memory_order_relaxed);
         int r0 = r.load(std::memory_order_acquire);
         int w1 = (w0 + 1) % kCapacity;
@@ -30,15 +35,16 @@ struct SfxEventQueue {
             // full, drop
             return;
         }
-        events[w0] = type;
+        events[w0].type = type;
+        events[w0].targetOutputFrame = targetOutputFrame;
         w.store(w1, std::memory_order_release);
     }
 
-    bool pop(int &outType) {
+    bool pop(Event &outEvent) {
         int r0 = r.load(std::memory_order_relaxed);
         int w0 = w.load(std::memory_order_acquire);
         if (r0 == w0) return false;
-        outType = events[r0];
+        outEvent = events[r0];
         int r1 = (r0 + 1) % kCapacity;
         r.store(r1, std::memory_order_release);
         return true;
@@ -136,6 +142,7 @@ static std::vector<float> generateBeep(float freqHz, float durSec, int sampleRat
 struct Voice {
     const std::vector<float> *buf = nullptr; // interleaved stereo
     int64_t frameIndex = 0; // in frames
+    int64_t startOffsetFrames = 0; // output frames from current callback start
 
     inline int64_t totalFrames() const {
         if (!buf) return 0;
@@ -329,7 +336,7 @@ public:
     }
 
     void triggerSfx(int noteType) {
-        mSfxQueue.push(noteType);
+        mSfxQueue.push(noteType, estimateGeneratedOutputFrameNow());
     }
 
     void setPlaybackSpeed(float speed) {
@@ -391,6 +398,7 @@ public:
         mCbStartNanos.store(0, std::memory_order_release);
         mCbNumFrames.store(0, std::memory_order_release);
         mCbSpeed.store(1.0f, std::memory_order_release);
+        mCbStartOutputFrames.store(0, std::memory_order_release);
         mRestartRequested.store(true);
         mPaused.store(false);
         mPlaying.store(true);
@@ -444,6 +452,8 @@ public:
 
         const int64_t startNs = mCbStartNanos.load(std::memory_order_acquire);
         const double startFrames = mCbStartFrames.load(std::memory_order_acquire);
+        const int64_t startOutputFrames = mCbStartOutputFrames.load(std::memory_order_acquire);
+        const int64_t endOutputFrames = mGeneratedOutputFrames.load(std::memory_order_acquire);
         const int32_t cbFrames = mCbNumFrames.load(std::memory_order_acquire);
         float cbSpeed = mCbSpeed.load(std::memory_order_acquire);
 
@@ -456,19 +466,19 @@ public:
         if (cbSpeed > 4.0f) cbSpeed = 4.0f;
 
         const int64_t nowNs = oboe::AudioClock::getNanoseconds();
-        const double dt = (double) (nowNs - startNs) * 1e-9;
-        if (dt <= 0.0) {
-            return startFrames / (double) mSampleRate;
-        }
+        const double generatedOutputNow = estimateGeneratedOutputFrameNow(startNs, startOutputFrames,
+                                                                          endOutputFrames, cbFrames);
+        const double outputDelta = generatedOutputNow - (double) startOutputFrames;
 
-        // Estimated position within this callback window.
-        double est = startFrames + dt * (double) mSampleRate * (double) cbSpeed;
+        // Estimated generated music position within this callback window.
+        double est = startFrames + outputDelta * (double) cbSpeed;
+
         // Upper bound for this window (and also clamp to the latest generated end frame).
         double maxFrames = startFrames + (double) cbFrames * (double) cbSpeed;
         if (endFrames < maxFrames) maxFrames = endFrames;
 
         if (est > maxFrames) est = maxFrames;
-        if (est < startFrames) est = startFrames;
+        if (est < 0.0) est = 0.0;
 
         return est / (double) mSampleRate;
     }
@@ -495,17 +505,19 @@ public:
             mCbStartNanos.store(0);
             mCbNumFrames.store(0);
             mCbSpeed.store(1.0f);
+            mCbStartOutputFrames.store(0);
             mVoices.clear();
             // 清空队列（简单做法：读到空）
-            int dummy;
+            SfxEventQueue::Event dummy;
             while (mSfxQueue.pop(dummy)) {}
         }
 
         // Drain SFX events into voices
-        int type;
-        while (mSfxQueue.pop(type)) {
+        const int64_t callbackStartOutputFrames = mGeneratedOutputFrames.load(std::memory_order_relaxed);
+        SfxEventQueue::Event event;
+        while (mSfxQueue.pop(event)) {
             const std::vector<float> *buf = nullptr;
-            switch (type) {
+            switch (event.type) {
                 case 1: buf = &mSfxTap; break;
                 case 2: buf = &mSfxDrag; break;
                 case 4: buf = &mSfxFlick; break;
@@ -514,7 +526,14 @@ public:
             if (buf && !buf->empty()) {
                 Voice v;
                 v.buf = buf;
-                v.frameIndex = 0;
+                const int64_t target = event.targetOutputFrame;
+                if (target > callbackStartOutputFrames) {
+                    v.frameIndex = 0;
+                    v.startOffsetFrames = target - callbackStartOutputFrames;
+                } else {
+                    v.frameIndex = 0;
+                    v.startOffsetFrames = 0;
+                }
                 mVoices.push_back(v);
             }
         }
@@ -554,6 +573,7 @@ public:
         mCbStartNanos.store(cbStartNs, std::memory_order_release);
         mCbNumFrames.store(numFrames, std::memory_order_release);
         mCbSpeed.store(speed, std::memory_order_release);
+        mCbStartOutputFrames.store(callbackStartOutputFrames, std::memory_order_release);
 
         for (int32_t f = 0; f < numFrames; f++) {
             float l = 0.0f;
@@ -583,6 +603,10 @@ public:
             // mix voices
             for (auto &v : mVoices) {
                 if (!v.buf) continue;
+                if (v.startOffsetFrames > 0) {
+                    v.startOffsetFrames--;
+                    continue;
+                }
                 int64_t vf = v.frameIndex;
                 int64_t vTotal = v.totalFrames();
                 if (vf >= 0 && vf < vTotal) {
@@ -629,10 +653,39 @@ public:
         }
 
         mPlayheadFrames.store(pos, std::memory_order_release);
+        mGeneratedOutputFrames.store(callbackStartOutputFrames + (int64_t) numFrames,
+                                     std::memory_order_release);
         return oboe::DataCallbackResult::Continue;
     }
 
 private:
+    int64_t estimateGeneratedOutputFrameNow() const {
+        const int64_t startNs = mCbStartNanos.load(std::memory_order_acquire);
+        const int64_t startOutputFrames = mCbStartOutputFrames.load(std::memory_order_acquire);
+        const int64_t endOutputFrames = mGeneratedOutputFrames.load(std::memory_order_acquire);
+        const int32_t cbFrames = mCbNumFrames.load(std::memory_order_acquire);
+        return (int64_t) std::llround(estimateGeneratedOutputFrameNow(startNs, startOutputFrames,
+                                                                      endOutputFrames, cbFrames));
+    }
+
+    double estimateGeneratedOutputFrameNow(int64_t startNs,
+                                           int64_t startOutputFrames,
+                                           int64_t endOutputFrames,
+                                           int32_t cbFrames) const {
+        if (mSampleRate <= 0 || startNs <= 0 || cbFrames <= 0) {
+            return (double) endOutputFrames;
+        }
+        const int64_t nowNs = oboe::AudioClock::getNanoseconds();
+        double dt = (double) (nowNs - startNs) * 1e-9;
+        if (!std::isfinite(dt) || dt < 0.0) dt = 0.0;
+        double out = (double) startOutputFrames + dt * (double) mSampleRate;
+        const double maxOutput = (double) startOutputFrames + (double) cbFrames;
+        if (out > maxOutput) out = maxOutput;
+        if (out > (double) endOutputFrames) out = (double) endOutputFrames;
+        if (out < (double) startOutputFrames) out = (double) startOutputFrames;
+        return out;
+    }
+
     void requestStartStream() {
         // Ensure a valid stream.
         if (!mStream && !create()) return;
@@ -664,7 +717,7 @@ private:
     }
 
     std::shared_ptr<oboe::AudioStream> mStream;
-    std::mutex mStreamMutex;
+    mutable std::mutex mStreamMutex;
     std::atomic<bool> mStreamNeedsReopen{false};
 
     oboe::AudioFormat mFormat = oboe::AudioFormat::Float;
@@ -688,6 +741,8 @@ private:
     std::atomic<int64_t> mCbStartNanos{0};
     std::atomic<int32_t> mCbNumFrames{0};
     std::atomic<float> mCbSpeed{1.0f};
+    std::atomic<int64_t> mCbStartOutputFrames{0};
+    std::atomic<int64_t> mGeneratedOutputFrames{0};
 
     std::atomic<double> mMusicDurationSec{0.0};
 
