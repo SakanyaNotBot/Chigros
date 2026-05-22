@@ -2,29 +2,38 @@
 <androidx.coordinatorlayout.widget.CoordinatorLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
-    android:layout_height="match_parent">
+    android:layout_height="match_parent"
+    android:background="@drawable/select_screen_bg">
 
     <com.google.android.material.appbar.AppBarLayout
         android:layout_width="match_parent"
-        android:layout_height="wrap_content">
+        android:layout_height="wrap_content"
+        android:background="@drawable/select_appbar_bg"
+        android:elevation="0dp"
+        app:elevation="0dp">
 
         <com.google.android.material.appbar.MaterialToolbar
             android:id="@+id/toolbar"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:background="@color/primary_color"
-            app:title="谱面"
-            app:titleTextColor="@color/text_icons" />
+            android:layout_height="56dp"
+            android:background="@drawable/select_appbar_bg"
+            android:paddingStart="6dp"
+            android:paddingEnd="6dp"
+            app:title="谱面设置"
+            app:titleTextColor="@color/select_text_primary" />
 
         <com.google.android.material.tabs.TabLayout
             android:id="@+id/tab_layout"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:background="@color/primary_color"
-            app:tabIndicatorColor="@color/accent_color"
-            app:tabSelectedTextColor="@color/text_icons"
-            app:tabTextColor="@color/light_primary_color"
-            app:tabMode="fixed" />
+            android:layout_height="48dp"
+            android:background="@drawable/select_appbar_bg"
+            app:tabIndicatorColor="@color/select_accent"
+            app:tabIndicatorFullWidth="false"
+            app:tabIndicatorHeight="3dp"
+            app:tabMode="fixed"
+            app:tabRippleColor="@color/select_chip"
+            app:tabSelectedTextColor="@color/select_text_primary"
+            app:tabTextColor="@color/select_tab_text" />
     </com.google.android.material.appbar.AppBarLayout>
 
     <androidx.viewpager2.widget.ViewPager2
@@ -37,13 +46,14 @@
         android:id="@+id/fab_start"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_margin="16dp"
         android:layout_gravity="bottom|end"
+        android:layout_margin="16dp"
         android:enabled="false"
-        android:text="开始"
         android:gravity="center"
-        android:textColor="@color/fab_start_text"
-        app:backgroundTint="@color/fab_start_background"
-        />
+        android:text="开始"
+        android:textColor="@color/select_primary_button_text"
+        app:backgroundTint="@color/select_primary_button_tint"
+        app:cornerRadius="8dp"
+        app:elevation="8dp" />
 
 </androidx.coordinatorlayout.widget.CoordinatorLayout>

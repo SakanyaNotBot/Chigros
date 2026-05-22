@@ -1,53 +1,51 @@
 <?xml version="1.0" encoding="utf-8"?>
 <androidx.core.widget.NestedScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    style="@style/SelectPageRoot"
     android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    android:clipToPadding="false"
-    android:paddingBottom="96dp">
+    android:layout_height="match_parent">
 
     <LinearLayout
+        style="@style/SelectPageContent"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:padding="16dp">
+        android:orientation="vertical">
 
         <com.google.android.material.card.MaterialCardView
+            style="@style/SelectCard"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="12dp"
-            app:cardUseCompatPadding="true">
+            android:layout_height="wrap_content">
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:padding="16dp">
+                android:padding="18dp">
 
                 <TextView
+                    style="@style/SelectSectionTitle"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="皮肤"
-                    android:textStyle="bold" />
+                    android:text="皮肤" />
 
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="12dp"
+                    android:gravity="center_vertical"
                     android:orientation="horizontal">
 
                     <com.google.android.material.textfield.TextInputLayout
-                        style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
+                        style="@style/SelectDropdown"
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
                         android:hint="选择皮肤"
-                        app:boxBackgroundMode="outline"
-                        app:endIconMode="dropdown_menu"
-                        app:hintEnabled="true">
+                        app:endIconMode="dropdown_menu">
 
                         <com.google.android.material.textfield.MaterialAutoCompleteTextView
                             android:id="@+id/act_skin"
+                            style="@style/SelectEditText"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:inputType="none" />
@@ -55,44 +53,43 @@
 
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/btn_skin_import"
+                        style="@style/SelectTextButton"
                         android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
+                        android:layout_height="48dp"
                         android:layout_marginStart="8dp"
                         android:text="导入"
                         android:textSize="14sp"
-                        app:icon="@android:drawable/ic_input_add"
-                        style="@style/Widget.MaterialComponents.Button.TextButton" />
+                        app:icon="@android:drawable/ic_input_add" />
 
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/btn_skin_delete"
+                        style="@style/SelectTextButton"
                         android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginStart="4dp"
+                        android:layout_height="48dp"
+                        android:layout_marginStart="6dp"
                         android:text="删除"
                         android:textSize="14sp"
-                        app:icon="@android:drawable/ic_delete"
-                        style="@style/Widget.MaterialComponents.Button.TextButton" />
+                        app:icon="@android:drawable/ic_delete" />
                 </LinearLayout>
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
         <com.google.android.material.card.MaterialCardView
+            style="@style/SelectCard"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="12dp"
-            app:cardUseCompatPadding="true">
+            android:layout_height="wrap_content">
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:padding="16dp">
+                android:padding="18dp">
 
                 <TextView
+                    style="@style/SelectSectionTitle"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="舞台宽高比"
-                    android:textStyle="bold" />
+                    android:text="舞台宽高比" />
 
                 <LinearLayout
                     android:layout_width="match_parent"
@@ -101,33 +98,32 @@
                     android:orientation="horizontal">
 
                     <com.google.android.material.textfield.TextInputLayout
-                        style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+                        style="@style/SelectInput"
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
-                        android:layout_weight="1"
                         android:layout_marginEnd="8dp"
-                        android:hint="比例小数"
-                        app:boxBackgroundMode="outline">
+                        android:layout_weight="1"
+                        android:hint="比例小数">
 
                         <com.google.android.material.textfield.TextInputEditText
                             android:id="@+id/et_aspect_decimal"
+                            style="@style/SelectEditText"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:inputType="numberDecimal" />
                     </com.google.android.material.textfield.TextInputLayout>
 
                     <com.google.android.material.textfield.TextInputLayout
-                        style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
+                        style="@style/SelectDropdown"
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
                         android:hint="预设"
-                        app:boxBackgroundMode="outline"
-                        app:endIconMode="dropdown_menu"
-                        app:hintEnabled="true">
+                        app:endIconMode="dropdown_menu">
 
                         <com.google.android.material.textfield.MaterialAutoCompleteTextView
                             android:id="@+id/act_aspect_preset"
+                            style="@style/SelectEditText"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:inputType="none" />
@@ -137,30 +133,31 @@
         </com.google.android.material.card.MaterialCardView>
 
         <com.google.android.material.card.MaterialCardView
+            style="@style/SelectCard"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="12dp"
-            app:cardUseCompatPadding="true">
+            android:layout_height="wrap_content">
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:padding="16dp">
+                android:padding="18dp">
 
                 <TextView
+                    style="@style/SelectSectionTitle"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="按键大小缩放"
-                    android:textStyle="bold" />
+                    android:text="按键大小缩放" />
 
                 <com.google.android.material.textfield.TextInputLayout
+                    style="@style/SelectInput"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="12dp">
 
                     <com.google.android.material.textfield.TextInputEditText
                         android:id="@+id/et_key_scale"
+                        style="@style/SelectEditText"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:hint="0.7 ~ 1.5"
@@ -171,37 +168,44 @@
                     android:id="@+id/slider_key_scale"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
+                    android:layout_marginTop="10dp"
                     android:valueFrom="0.7"
-                    android:valueTo="1.5" />
+                    android:valueTo="1.5"
+                    app:haloColor="@color/select_slider_halo"
+                    app:thumbColor="@color/select_slider_active"
+                    app:tickColorActive="@color/select_slider_active"
+                    app:tickColorInactive="@color/select_slider_inactive"
+                    app:trackColorActive="@color/select_slider_active"
+                    app:trackColorInactive="@color/select_slider_inactive" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
         <com.google.android.material.card.MaterialCardView
+            style="@style/SelectCard"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="12dp"
-            app:cardUseCompatPadding="true">
+            android:layout_height="wrap_content">
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:padding="16dp">
+                android:padding="18dp">
 
                 <TextView
+                    style="@style/SelectSectionTitle"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="谱面流速设置"
-                    android:textStyle="bold" />
+                    android:text="谱面流速" />
 
                 <com.google.android.material.textfield.TextInputLayout
+                    style="@style/SelectInput"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="12dp">
 
                     <com.google.android.material.textfield.TextInputEditText
                         android:id="@+id/et_scroll_speed"
+                        style="@style/SelectEditText"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:hint="0.1 ~ 5.0"
@@ -212,100 +216,121 @@
                     android:id="@+id/slider_scroll_speed"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
+                    android:layout_marginTop="10dp"
                     android:stepSize="0.1"
                     android:valueFrom="0.1"
-                    android:valueTo="5.0" />
+                    android:valueTo="5.0"
+                    app:haloColor="@color/select_slider_halo"
+                    app:thumbColor="@color/select_slider_active"
+                    app:tickColorActive="@color/select_slider_active"
+                    app:tickColorInactive="@color/select_slider_inactive"
+                    app:trackColorActive="@color/select_slider_active"
+                    app:trackColorInactive="@color/select_slider_inactive" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
         <com.google.android.material.card.MaterialCardView
+            style="@style/SelectCard"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            app:cardUseCompatPadding="true">
+            android:layout_height="wrap_content">
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:padding="16dp">
+                android:padding="18dp">
 
                 <com.google.android.material.switchmaterial.SwitchMaterial
                     android:id="@+id/sw_mirror_x"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="镜像演示（X 轴）" />
+                    android:text="镜像演示（X 轴）"
+                    android:textColor="@color/select_text_primary" />
 
                 <com.google.android.material.switchmaterial.SwitchMaterial
                     android:id="@+id/sw_autoplay"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="8dp"
-                    android:text="自动演示" />
+                    android:text="自动演示"
+                    android:textColor="@color/select_text_primary" />
 
                 <com.google.android.material.switchmaterial.SwitchMaterial
                     android:id="@+id/sw_challenge"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="8dp"
-                    android:text="挑战模式" />
+                    android:text="挑战模式"
+                    android:textColor="@color/select_text_primary" />
 
                 <TextView
+                    style="@style/SelectSectionTitle"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="16dp"
-                    android:text="背景亮度"
-                    android:textStyle="bold" />
+                    android:text="背景亮度" />
 
                 <com.google.android.material.slider.Slider
                     android:id="@+id/slider_bg_dim"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
+                    android:layout_marginTop="10dp"
                     android:valueFrom="0"
-                    android:valueTo="1" />
+                    android:valueTo="1"
+                    app:haloColor="@color/select_slider_halo"
+                    app:thumbColor="@color/select_slider_active_alt"
+                    app:tickColorActive="@color/select_slider_active_alt"
+                    app:tickColorInactive="@color/select_slider_inactive"
+                    app:trackColorActive="@color/select_slider_active_alt"
+                    app:trackColorInactive="@color/select_slider_inactive" />
 
                 <com.google.android.material.switchmaterial.SwitchMaterial
                     android:id="@+id/sw_low_res"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="16dp"
-                    android:text="低分辨率模式" />
+                    android:text="低分辨率模式"
+                    android:textColor="@color/select_text_primary" />
 
                 <com.google.android.material.switchmaterial.SwitchMaterial
                     android:id="@+id/sw_antialias"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="8dp"
-                    android:text="抗锯齿" />
+                    android:text="抗锯齿"
+                    android:textColor="@color/select_text_primary" />
 
                 <com.google.android.material.switchmaterial.SwitchMaterial
                     android:id="@+id/sw_show_fps"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="8dp"
-                    android:text="显示FPS" />
+                    android:text="显示 FPS"
+                    android:textColor="@color/select_text_primary" />
 
                 <com.google.android.material.switchmaterial.SwitchMaterial
                     android:id="@+id/sw_show_debug"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="8dp"
-                    android:text="显示调试信息" />
+                    android:text="显示调试信息"
+                    android:textColor="@color/select_text_primary" />
 
                 <com.google.android.material.switchmaterial.SwitchMaterial
                     android:id="@+id/sw_multi_highlight"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="8dp"
-                    android:text="多押高亮提示" />
+                    android:text="多押高亮提示"
+                    android:textColor="@color/select_text_primary" />
 
                 <com.google.android.material.switchmaterial.SwitchMaterial
                     android:id="@+id/sw_apfc"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="8dp"
-                    android:text="AP/FC 指示器" />
+                    android:text="AP / FC 指示器"
+                    android:textColor="@color/select_text_primary" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
     </LinearLayout>

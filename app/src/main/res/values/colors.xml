@@ -9,5 +9,22 @@
     <color name="secondary_text">#757575</color>
     <color name="divider_color">#BDBDBD</color>
     <color name="disabled_surface">#BDBDBD</color>
-</resources>
 
+    <color name="select_bg_top">#10131A</color>
+    <color name="select_bg_mid">#151A23</color>
+    <color name="select_bg_bottom">#0D1016</color>
+    <color name="select_surface">#E61B222D</color>
+    <color name="select_surface_high">#F0232B38</color>
+    <color name="select_surface_pressed">#303B49</color>
+    <color name="select_outline">#2F3B4A</color>
+    <color name="select_outline_strong">#4A5A6E</color>
+    <color name="select_text_primary">#F3F7FB</color>
+    <color name="select_text_secondary">#A9B4C2</color>
+    <color name="select_text_muted">#758294</color>
+    <color name="select_accent">#56D6C9</color>
+    <color name="select_accent_2">#86A7C7</color>
+    <color name="select_ripple">#3A4656</color>
+    <color name="select_danger">#FF6B7A</color>
+    <color name="select_topbar">#F00F141B</color>
+    <color name="select_chip">#1F2A35</color>
+</resources>

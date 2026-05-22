@@ -1,78 +1,79 @@
 <?xml version="1.0" encoding="utf-8"?>
 <androidx.core.widget.NestedScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    style="@style/SelectPageRoot"
     android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    android:clipToPadding="false"
-    android:paddingBottom="96dp">
+    android:layout_height="match_parent">
 
     <LinearLayout
+        style="@style/SelectPageContent"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:padding="16dp">
+        android:orientation="vertical">
 
         <com.google.android.material.card.MaterialCardView
+            style="@style/SelectCard"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="12dp"
-            app:cardUseCompatPadding="true">
+            android:layout_height="wrap_content">
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:padding="16dp">
+                android:padding="18dp">
 
                 <TextView
+                    style="@style/SelectSectionTitle"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="谱面压缩包"
-                    android:textStyle="bold" />
+                    android:text="谱面包" />
 
                 <TextView
                     android:id="@+id/tv_pack_status"
+                    style="@style/SelectStatusText"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
+                    android:layout_marginTop="12dp"
                     android:text="未选择" />
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btn_pick_zip"
+                    style="@style/SelectButton"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="12dp"
-                    android:text="选择谱面压缩包（zip）" />
+                    android:text="选择 ZIP 谱面包" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
         <com.google.android.material.card.MaterialCardView
+            style="@style/SelectCard"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="12dp"
-            app:cardUseCompatPadding="true">
+            android:layout_height="wrap_content">
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:padding="16dp">
+                android:padding="18dp">
 
                 <TextView
+                    style="@style/SelectSectionTitle"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="分别选择文件"
-                    android:textStyle="bold" />
+                    android:text="单独选择文件" />
 
                 <TextView
                     android:id="@+id/tv_music"
+                    style="@style/SelectStatusText"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
+                    android:layout_marginTop="12dp"
                     android:text="音乐：未选择" />
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btn_pick_music"
+                    style="@style/SelectButton"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="8dp"
@@ -80,6 +81,7 @@
 
                 <TextView
                     android:id="@+id/tv_chart"
+                    style="@style/SelectStatusText"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="12dp"
@@ -87,6 +89,7 @@
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btn_pick_chart"
+                    style="@style/SelectButton"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="8dp"
@@ -94,6 +97,7 @@
 
                 <TextView
                     android:id="@+id/tv_bg"
+                    style="@style/SelectStatusText"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="12dp"
@@ -101,6 +105,7 @@
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btn_pick_bg"
+                    style="@style/SelectButton"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="8dp"
@@ -109,33 +114,34 @@
         </com.google.android.material.card.MaterialCardView>
 
         <com.google.android.material.card.MaterialCardView
+            style="@style/SelectCard"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            app:cardUseCompatPadding="true">
+            android:layout_height="wrap_content">
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:padding="16dp">
+                android:padding="18dp">
 
                 <TextView
+                    style="@style/SelectSectionTitle"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="谱面信息"
-                    android:textStyle="bold" />
+                    android:text="谱面信息" />
 
                 <com.google.android.material.textfield.TextInputLayout
                     android:id="@+id/til_song_name"
+                    style="@style/SelectInput"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="12dp"
                     android:enabled="false"
-                    app:hintEnabled="true"
-                    app:hintTextAppearance="@style/TextAppearance.MaterialComponents.Body2">
+                    app:hintEnabled="true">
 
                     <com.google.android.material.textfield.TextInputEditText
                         android:id="@+id/et_song_name"
+                        style="@style/SelectEditText"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:hint="曲名" />
@@ -143,21 +149,23 @@
 
                 <com.google.android.material.textfield.TextInputLayout
                     android:id="@+id/til_difficulty"
+                    style="@style/SelectInput"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="12dp"
                     android:enabled="false"
-                    app:hintEnabled="true"
-                    app:hintTextAppearance="@style/TextAppearance.MaterialComponents.Body2">
+                    app:hintEnabled="true">
 
                     <com.google.android.material.textfield.TextInputEditText
                         android:id="@+id/et_difficulty"
+                        style="@style/SelectEditText"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:hint="难度" />
                 </com.google.android.material.textfield.TextInputLayout>
 
                 <com.google.android.material.textfield.TextInputLayout
+                    style="@style/SelectInput"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="12dp"
@@ -165,6 +173,7 @@
 
                     <com.google.android.material.textfield.TextInputEditText
                         android:id="@+id/et_chart_offset_ms"
+                        style="@style/SelectEditText"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:hint="谱面偏移（ms）"

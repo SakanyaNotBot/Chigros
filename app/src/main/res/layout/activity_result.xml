@@ -201,8 +201,11 @@
                     android:id="@+id/tv_std"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
+                    android:ellipsize="none"
                     android:includeFontPadding="false"
                     android:fontFamily="sans-serif-medium"
+                    android:maxLines="1"
+                    android:singleLine="true"
                     android:textColor="#FFFFFF"
                     android:textSize="22sp"
                     android:textStyle="bold"
@@ -252,7 +255,8 @@
                     android:layout_gravity="bottom"
                     android:orientation="horizontal"
                     android:gravity="center_vertical"
-                    android:paddingHorizontal="12dp">
+                    android:paddingStart="28dp"
+                    android:paddingEnd="28dp">
 
                     <TextView
                         android:id="@+id/tv_song"
@@ -315,6 +319,7 @@
             android:paddingStart="8dp"
             android:paddingTop="8dp"
             android:paddingBottom="8dp"
+            android:layout_marginTop="10dp"
             app:layout_constraintStart_toEndOf="@id/gl_left_lower"
             app:layout_constraintEnd_toStartOf="@id/gl_right_board"
             app:layout_constraintTop_toBottomOf="@id/gl_top_lower">

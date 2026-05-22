@@ -1,42 +1,42 @@
 <?xml version="1.0" encoding="utf-8"?>
 <androidx.core.widget.NestedScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    style="@style/SelectPageRoot"
     android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    android:clipToPadding="false"
-    android:paddingBottom="96dp">
+    android:layout_height="match_parent">
 
     <LinearLayout
+        style="@style/SelectPageContent"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:padding="16dp">
+        android:orientation="vertical">
 
         <com.google.android.material.card.MaterialCardView
+            style="@style/SelectCard"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="12dp"
-            app:cardUseCompatPadding="true">
+            android:layout_height="wrap_content">
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:padding="16dp">
+                android:padding="18dp">
 
                 <TextView
+                    style="@style/SelectSectionTitle"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="音乐音量"
-                    android:textStyle="bold" />
+                    android:text="音乐音量" />
 
                 <com.google.android.material.textfield.TextInputLayout
+                    style="@style/SelectInput"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="12dp">
 
                     <com.google.android.material.textfield.TextInputEditText
                         android:id="@+id/et_music_volume"
+                        style="@style/SelectEditText"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:hint="0 ~ 500"
@@ -47,38 +47,45 @@
                     android:id="@+id/slider_music_volume"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
+                    android:layout_marginTop="10dp"
                     android:stepSize="1"
                     android:valueFrom="0"
-                    android:valueTo="500" />
+                    android:valueTo="500"
+                    app:haloColor="@color/select_slider_halo"
+                    app:thumbColor="@color/select_slider_active"
+                    app:tickColorActive="@color/select_slider_active"
+                    app:tickColorInactive="@color/select_slider_inactive"
+                    app:trackColorActive="@color/select_slider_active"
+                    app:trackColorInactive="@color/select_slider_inactive" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
         <com.google.android.material.card.MaterialCardView
+            style="@style/SelectCard"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="12dp"
-            app:cardUseCompatPadding="true">
+            android:layout_height="wrap_content">
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:padding="16dp">
+                android:padding="18dp">
 
                 <TextView
+                    style="@style/SelectSectionTitle"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="音效音量"
-                    android:textStyle="bold" />
+                    android:text="打击音效音量" />
 
                 <com.google.android.material.textfield.TextInputLayout
+                    style="@style/SelectInput"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="12dp">
 
                     <com.google.android.material.textfield.TextInputEditText
                         android:id="@+id/et_sfx_volume"
+                        style="@style/SelectEditText"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:hint="0 ~ 500"
@@ -89,37 +96,45 @@
                     android:id="@+id/slider_sfx_volume"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
+                    android:layout_marginTop="10dp"
                     android:stepSize="1"
                     android:valueFrom="0"
-                    android:valueTo="500" />
+                    android:valueTo="500"
+                    app:haloColor="@color/select_slider_halo"
+                    app:thumbColor="@color/select_slider_active"
+                    app:tickColorActive="@color/select_slider_active"
+                    app:tickColorInactive="@color/select_slider_inactive"
+                    app:trackColorActive="@color/select_slider_active"
+                    app:trackColorInactive="@color/select_slider_inactive" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
         <com.google.android.material.card.MaterialCardView
+            style="@style/SelectCard"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            app:cardUseCompatPadding="true">
+            android:layout_height="wrap_content">
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:padding="16dp">
+                android:padding="18dp">
 
                 <TextView
+                    style="@style/SelectSectionTitle"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="音乐倍速"
-                    android:textStyle="bold" />
+                    android:text="音乐倍速" />
 
                 <com.google.android.material.textfield.TextInputLayout
+                    style="@style/SelectInput"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="12dp">
 
                     <com.google.android.material.textfield.TextInputEditText
                         android:id="@+id/et_music_speed"
+                        style="@style/SelectEditText"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:hint="0.5 ~ 2.0"
@@ -130,9 +145,15 @@
                     android:id="@+id/slider_music_speed"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
+                    android:layout_marginTop="10dp"
                     android:valueFrom="0.5"
-                    android:valueTo="2.0" />
+                    android:valueTo="2.0"
+                    app:haloColor="@color/select_slider_halo"
+                    app:thumbColor="@color/select_slider_active_alt"
+                    app:tickColorActive="@color/select_slider_active_alt"
+                    app:tickColorInactive="@color/select_slider_inactive"
+                    app:trackColorActive="@color/select_slider_active_alt"
+                    app:trackColorInactive="@color/select_slider_inactive" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
     </LinearLayout>

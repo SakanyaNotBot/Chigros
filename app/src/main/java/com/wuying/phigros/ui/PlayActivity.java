@@ -4,6 +4,7 @@ import android.annotation.SuppressLint;
 import android.content.Intent;
 import android.graphics.Color;
 import android.graphics.Typeface;
+import android.graphics.drawable.GradientDrawable;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
@@ -103,6 +104,7 @@ public class PlayActivity extends AppCompatActivity implements GameRenderer.Call
     private GameGLSurfaceView glView;
     private GameRenderer renderer;
     private FrameLayout loadingView;
+    private LinearLayout loadingPanel;
     private ProgressBar loadingProgress;
     private TextView loadingText;
     private FrameLayout rootLayout;
@@ -202,29 +204,55 @@ public class PlayActivity extends AppCompatActivity implements GameRenderer.Call
     }
 
     private void setLoadingUi() {
+        final float d = getResources().getDisplayMetrics().density;
         FrameLayout root = new FrameLayout(this);
         root.setLayoutParams(new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT,
                 FrameLayout.LayoutParams.MATCH_PARENT));
+        root.setBackground(new GradientDrawable(
+                GradientDrawable.Orientation.TOP_BOTTOM,
+                new int[]{0xFF10131A, 0xFF151A23, 0xFF0D1016}));
+
+        loadingPanel = new LinearLayout(this);
+        loadingPanel.setOrientation(LinearLayout.VERTICAL);
+        loadingPanel.setGravity(Gravity.CENTER_HORIZONTAL);
+        loadingPanel.setPadding((int) (28 * d), (int) (26 * d), (int) (28 * d), (int) (24 * d));
+        GradientDrawable panelBg = new GradientDrawable();
+        panelBg.setColor(0xE61B222D);
+        panelBg.setCornerRadius(8 * d);
+        panelBg.setStroke((int) Math.max(1, d), 0xFF2F3B4A);
+        loadingPanel.setBackground(panelBg);
+        FrameLayout.LayoutParams panelLp = new FrameLayout.LayoutParams(
+                (int) (280 * d),
+                FrameLayout.LayoutParams.WRAP_CONTENT);
+        panelLp.gravity = Gravity.CENTER;
+        loadingPanel.setLayoutParams(panelLp);
 
         loadingProgress = new ProgressBar(this);
-        FrameLayout.LayoutParams pbLp = new FrameLayout.LayoutParams(
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            loadingProgress.setIndeterminateTintList(android.content.res.ColorStateList.valueOf(0xFF56D6C9));
+        }
+        LinearLayout.LayoutParams pbLp = new LinearLayout.LayoutParams(
                 FrameLayout.LayoutParams.WRAP_CONTENT,
                 FrameLayout.LayoutParams.WRAP_CONTENT);
-        pbLp.gravity = Gravity.CENTER;
+        pbLp.gravity = Gravity.CENTER_HORIZONTAL;
         loadingProgress.setLayoutParams(pbLp);
 
         loadingText = new TextView(this);
-        FrameLayout.LayoutParams tvLp = new FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.WRAP_CONTENT,
+        LinearLayout.LayoutParams tvLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
                 FrameLayout.LayoutParams.WRAP_CONTENT);
-        tvLp.gravity = Gravity.CENTER_HORIZONTAL | Gravity.CENTER_VERTICAL;
-        tvLp.topMargin = (int) (64 * getResources().getDisplayMetrics().density);
+        tvLp.topMargin = (int) (18 * d);
         loadingText.setLayoutParams(tvLp);
         loadingText.setText("加载中...\n(正在解析谱面与解码音频)");
+        loadingText.setTextColor(0xFFF3F7FB);
+        loadingText.setTextSize(15);
+        loadingText.setGravity(Gravity.CENTER);
+        loadingText.setLineSpacing(2 * d, 1.0f);
 
-        root.addView(loadingProgress);
-        root.addView(loadingText);
+        loadingPanel.addView(loadingProgress);
+        loadingPanel.addView(loadingText);
+        root.addView(loadingPanel);
         loadingView = root;
         setContentView(root);
     }
@@ -739,8 +767,17 @@ public class PlayActivity extends AppCompatActivity implements GameRenderer.Call
 
     @Override
     public void onResourcesReady() {
-        if (loadingProgress != null) loadingView.removeView(loadingProgress);
-        if (loadingText != null) loadingView.removeView(loadingText);
+        if (loadingPanel != null && loadingPanel.getParent() instanceof android.view.ViewGroup) {
+            ((android.view.ViewGroup) loadingPanel.getParent()).removeView(loadingPanel);
+        } else {
+            if (loadingProgress != null && loadingProgress.getParent() instanceof android.view.ViewGroup) {
+                ((android.view.ViewGroup) loadingProgress.getParent()).removeView(loadingProgress);
+            }
+            if (loadingText != null && loadingText.getParent() instanceof android.view.ViewGroup) {
+                ((android.view.ViewGroup) loadingText.getParent()).removeView(loadingText);
+            }
+        }
+        loadingPanel = null;
         new Handler(Looper.getMainLooper()).postDelayed(() -> {
             if (isFinishing() || isDestroyed()) return;
             if (renderer == null) return;

@@ -155,8 +155,10 @@ public class SelectReplayFragment extends Fragment {
         if (replays.isEmpty()) {
             TextView empty = new TextView(requireContext());
             empty.setText("暂无回放记录");
-            empty.setAlpha(0.5f);
-            empty.setPadding(0, 8, 0, 8);
+            empty.setTextColor(0xFFA9B4C2);
+            empty.setTextSize(14);
+            empty.setGravity(android.view.Gravity.CENTER);
+            empty.setPadding(0, dp(18), 0, dp(18));
             replayListContainer.addView(empty);
             return;
         }
@@ -170,19 +172,20 @@ public class SelectReplayFragment extends Fragment {
         MaterialCardView card = new MaterialCardView(requireContext());
         LinearLayout.LayoutParams cardLp = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        cardLp.topMargin = dp(4);
-        cardLp.bottomMargin = dp(4);
+        cardLp.topMargin = dp(5);
+        cardLp.bottomMargin = dp(5);
         card.setLayoutParams(cardLp);
         card.setCardElevation(0);
         card.setStrokeWidth(dp(1));
-        card.setStrokeColor(0x22000000);
+        card.setStrokeColor(0xFF2F3B4A);
         card.setRadius(dp(8));
+        card.setCardBackgroundColor(0xF0232B38);
         card.setClickable(true);
         card.setFocusable(true);
 
         LinearLayout row = new LinearLayout(requireContext());
         row.setOrientation(LinearLayout.HORIZONTAL);
-        row.setPadding(dp(12), dp(8), dp(8), dp(8));
+        row.setPadding(dp(14), dp(10), dp(10), dp(10));
         row.setGravity(android.view.Gravity.CENTER_VERTICAL);
 
         // Checkbox (selection mode only)
@@ -208,6 +211,7 @@ public class SelectReplayFragment extends Fragment {
 
         TextView tvTitle = new TextView(requireContext());
         tvTitle.setText(info.songName + "  " + info.difficulty);
+        tvTitle.setTextColor(0xFFF3F7FB);
         tvTitle.setTextSize(14);
         tvTitle.setSingleLine(true);
         tvTitle.setTypeface(tvTitle.getTypeface(), Typeface.BOLD);
@@ -216,8 +220,8 @@ public class SelectReplayFragment extends Fragment {
         String dateStr = new SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
                 .format(new Date(info.timestamp));
         tvSubtitle.setText(String.format(Locale.US, "%07d  %s", info.score, dateStr));
+        tvSubtitle.setTextColor(0xFFA9B4C2);
         tvSubtitle.setTextSize(12);
-        tvSubtitle.setAlpha(0.6f);
 
         infoCol.addView(tvTitle);
         infoCol.addView(tvSubtitle);

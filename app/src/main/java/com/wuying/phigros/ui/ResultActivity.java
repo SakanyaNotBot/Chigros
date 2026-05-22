@@ -145,7 +145,7 @@ public class ResultActivity extends AppCompatActivity {
             if (tvScore != null) tvScore.setText(String.format(Locale.US, "%07d", result.score));
             if (tvAcc != null) tvAcc.setText(String.format(Locale.US, "%.2f%%", result.accuracy));
             if (tvMaxCombo != null) tvMaxCombo.setText(String.valueOf(result.maxCombo));
-            if (tvStd != null) tvStd.setText(String.format(Locale.US, "%.3f ms", result.stdDevMs));
+            if (tvStd != null) tvStd.setText(String.format(Locale.US, "%.3f\u00A0ms", result.stdDevMs));
             if (tvPerfect != null) tvPerfect.setText(String.valueOf(result.perfect));
             if (tvGood != null) tvGood.setText(String.valueOf(result.goodEarly + result.goodLate));
             if (tvBad != null) tvBad.setText(String.valueOf(result.bad));
