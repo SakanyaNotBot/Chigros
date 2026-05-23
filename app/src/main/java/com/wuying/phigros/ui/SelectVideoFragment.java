@@ -25,11 +25,8 @@ import java.util.Locale;
 
 public class SelectVideoFragment extends Fragment {
 
-    private static final String LABEL_FOLLOW = "跟随屏幕比例";
-    private static final String LABEL_MANUAL = "手动输入";
-
-    private static final String[] PRESET_LABELS = new String[]{
-            LABEL_FOLLOW, "5:4", "4:3", "10:7", "19:13", "8:5", "5:3", "22:13", "16:9"
+    private static final String[] PRESET_RATIO_LABELS = new String[]{
+            null, "5:4", "4:3", "10:7", "19:13", "8:5", "5:3", "22:13", "16:9"
     };
     private static final float[] PRESET_VALUES = new float[]{
             0f, 1.25f, 1.3333333f, 1.4285714f, 1.4615385f, 1.6f, 1.6666667f, 1.6923077f, 1.7777778f
@@ -112,13 +109,13 @@ public class SelectVideoFragment extends Fragment {
             android.widget.ArrayAdapter<String> ad = new android.widget.ArrayAdapter<>(
                     requireContext(),
                     android.R.layout.simple_list_item_1,
-                    PRESET_LABELS
+                    buildPresetLabels()
             );
             actPreset.setAdapter(ad);
             actPreset.setOnItemClickListener((parent, v, position, id) -> {
                 if (suppress) return;
                 float val = (position >= 0 && position < PRESET_VALUES.length) ? PRESET_VALUES[position] : 0f;
-                applyPresetSelection(PRESET_LABELS[position], val);
+                applyPresetSelection(getPresetLabel(position), val);
             });
         }
 
@@ -257,7 +254,7 @@ public class SelectVideoFragment extends Fragment {
         float ar = a.getAspectRatio();
         if (actPreset != null) {
             if (ar <= 0f) {
-                actPreset.setText(LABEL_FOLLOW, false);
+                actPreset.setText(getString(R.string.option_follow_screen), false);
             } else {
                 updatePresetLabelForValue(ar);
             }
@@ -297,14 +294,14 @@ public class SelectVideoFragment extends Fragment {
     private void applyPresetSelection(String label, float val) {
         ChartSelectActivity a = host();
         suppress = true;
-        if (LABEL_FOLLOW.equals(label) || val <= 0f) {
+        if (getString(R.string.option_follow_screen).equals(label) || val <= 0f) {
             a.setAspectRatio(0f);
             float screen = getScreenAspect();
             if (etAspect != null) {
                 etAspect.setText(formatFloat(screen));
                 etAspect.setEnabled(false);
             }
-            if (actPreset != null) actPreset.setText(LABEL_FOLLOW, false);
+            if (actPreset != null) actPreset.setText(getString(R.string.option_follow_screen), false);
         } else {
             a.setAspectRatio(val);
             if (etAspect != null) {
@@ -320,10 +317,25 @@ public class SelectVideoFragment extends Fragment {
         if (actPreset == null) return;
         int idx = findPresetIndex(v);
         if (idx >= 0) {
-            actPreset.setText(PRESET_LABELS[idx], false);
+            actPreset.setText(getPresetLabel(idx), false);
         } else {
-            actPreset.setText(LABEL_MANUAL, false);
+            actPreset.setText(getString(R.string.option_manual_input), false);
         }
+    }
+
+    private String[] buildPresetLabels() {
+        String[] labels = new String[PRESET_RATIO_LABELS.length];
+        labels[0] = getString(R.string.option_follow_screen);
+        for (int i = 1; i < labels.length; i++) {
+            labels[i] = PRESET_RATIO_LABELS[i];
+        }
+        return labels;
+    }
+
+    private String getPresetLabel(int index) {
+        if (index == 0) return getString(R.string.option_follow_screen);
+        if (index > 0 && index < PRESET_RATIO_LABELS.length) return PRESET_RATIO_LABELS[index];
+        return getString(R.string.option_manual_input);
     }
 
     private int findPresetIndex(float v) {

@@ -84,9 +84,9 @@ public class SelectReplayFragment extends Fragment {
                     }
                     try {
                         int count = ReplayManager.exportReplaysToCgrp(requireContext(), new ArrayList<>(selectedUuids));
-                        Toast.makeText(requireContext(), "已导出 " + count + " 个回放到 Download/Chigros/", Toast.LENGTH_SHORT).show();
+                        Toast.makeText(requireContext(), getString(R.string.toast_replay_export_success, count), Toast.LENGTH_SHORT).show();
                     } catch (IOException e) {
-                        Toast.makeText(requireContext(), "导出失败：" + e.getMessage(), Toast.LENGTH_SHORT).show();
+                        Toast.makeText(requireContext(), getString(R.string.toast_replay_export_failed, e.getMessage()), Toast.LENGTH_SHORT).show();
                     }
                     exitSelectionMode();
                 }
@@ -103,9 +103,9 @@ public class SelectReplayFragment extends Fragment {
                         return;
                     }
                     new AlertDialog.Builder(requireContext())
-                            .setTitle("确认删除")
-                            .setMessage("确定要删除选中的 " + selectedUuids.size() + " 个回放吗？")
-                            .setPositiveButton("删除", (dialog, which) -> {
+                            .setTitle(R.string.dialog_confirm_delete)
+                            .setMessage(getString(R.string.dialog_delete_replay_message, selectedUuids.size()))
+                            .setPositiveButton(R.string.action_delete, (dialog, which) -> {
                                 for (String uuid : new ArrayList<>(selectedUuids)) {
                                     ReplayManager.deleteReplay(requireContext(), uuid);
                                 }
@@ -113,7 +113,7 @@ public class SelectReplayFragment extends Fragment {
                                 exitSelectionMode();
                                 refreshList();
                             })
-                            .setNegativeButton("取消", null)
+                            .setNegativeButton(R.string.action_cancel, null)
                             .show();
                 }
             });
@@ -154,7 +154,7 @@ public class SelectReplayFragment extends Fragment {
         List<ReplayManager.ReplayInfo> replays = ReplayManager.getReplayList(requireContext());
         if (replays.isEmpty()) {
             TextView empty = new TextView(requireContext());
-            empty.setText("暂无回放记录");
+            empty.setText(R.string.replay_empty);
             empty.setTextColor(0xFFA9B4C2);
             empty.setTextSize(14);
             empty.setGravity(android.view.Gravity.CENTER);
@@ -289,7 +289,7 @@ public class SelectReplayFragment extends Fragment {
     private void playReplay(String uuid) {
         ReplayData data = ReplayManager.getReplayData(requireContext(), uuid);
         if (data == null || data.meta == null) {
-            Toast.makeText(requireContext(), "回放数据损坏", Toast.LENGTH_SHORT).show();
+            Toast.makeText(requireContext(), R.string.toast_replay_data_corrupt, Toast.LENGTH_SHORT).show();
             return;
         }
 
@@ -299,7 +299,7 @@ public class SelectReplayFragment extends Fragment {
         File replayJson = new File(ReplayManager.getReplayDir(requireContext(), uuid), "replay.json");
 
         if (chartFile == null || musicFile == null || bgFile == null || !replayJson.exists()) {
-            Toast.makeText(requireContext(), "回放资源不完整", Toast.LENGTH_SHORT).show();
+            Toast.makeText(requireContext(), R.string.toast_replay_resources_incomplete, Toast.LENGTH_SHORT).show();
             return;
         }
 

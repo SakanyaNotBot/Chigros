@@ -6,6 +6,7 @@ import android.os.Environment;
 
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.wuying.phigros.R;
 import com.wuying.phigros.game.PlayResult;
 import com.wuying.phigros.game.ReplayData;
 
@@ -208,7 +209,7 @@ public final class ReplayManager {
         String uuid = UUID.randomUUID().toString().replace("-", "");
         File replayDir = new File(getReplaysRoot(context), uuid);
         if (!replayDir.mkdirs()) {
-            throw new IOException("无法创建回放目录");
+            throw new IOException(context.getString(R.string.error_create_replay_dir));
         }
 
         // Save replay.json
@@ -371,7 +372,7 @@ public final class ReplayManager {
     public static String importReplayFromCgrp(Context context, File zipFile) throws IOException {
         // Extract to temp dir for validation
         File tempDir = new File(context.getCacheDir(), "cgrp_import_" + System.currentTimeMillis());
-        if (!tempDir.mkdirs()) throw new IOException("无法创建临时目录");
+        if (!tempDir.mkdirs()) throw new IOException(context.getString(R.string.error_create_temp_dir));
 
         boolean hasReplayJson = false;
         boolean hasInfoTxt = false;
@@ -419,19 +420,19 @@ public final class ReplayManager {
 
         if (!hasReplayJson) {
             deleteRecursive(tempDir);
-            throw new IOException("回放文件损坏：缺少 replay.json");
+            throw new IOException(context.getString(R.string.error_replay_missing_json));
         }
         if (!hasInfoTxt && !hasJson) {
             deleteRecursive(tempDir);
-            throw new IOException("回放文件损坏：缺少谱面文件");
+            throw new IOException(context.getString(R.string.error_replay_missing_chart));
         }
         if (!hasAudio) {
             deleteRecursive(tempDir);
-            throw new IOException("回放文件损坏：缺少音频文件");
+            throw new IOException(context.getString(R.string.error_replay_missing_audio));
         }
         if (!hasImage) {
             deleteRecursive(tempDir);
-            throw new IOException("回放文件损坏：缺少图片文件");
+            throw new IOException(context.getString(R.string.error_replay_missing_image));
         }
 
         // Valid — move to persistent storage
@@ -439,7 +440,7 @@ public final class ReplayManager {
         File replayDir = new File(getReplaysRoot(context), uuid);
         if (!replayDir.mkdirs()) {
             deleteRecursive(tempDir);
-            throw new IOException("无法创建回放目录");
+            throw new IOException(context.getString(R.string.error_create_replay_dir));
         }
 
         // Find replay.json and move tempDir contents to replayDir
@@ -447,7 +448,7 @@ public final class ReplayManager {
         if (replayJsonSrc == null) {
             deleteRecursive(tempDir);
             deleteRecursive(replayDir);
-            throw new IOException("回放文件损坏：找不到 replay.json");
+            throw new IOException(context.getString(R.string.error_replay_json_not_found));
         }
 
         // Move all files from tempDir to replayDir

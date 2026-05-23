@@ -19,7 +19,7 @@
             android:background="@drawable/select_appbar_bg"
             android:paddingStart="6dp"
             android:paddingEnd="6dp"
-            app:title="谱面设置"
+            app:title="@string/title_chart_settings"
             app:titleTextColor="@color/select_text_primary" />
 
         <com.google.android.material.tabs.TabLayout
@@ -50,7 +50,7 @@
         android:layout_margin="16dp"
         android:enabled="false"
         android:gravity="center"
-        android:text="开始"
+        android:text="@string/action_start"
         android:textColor="@color/select_primary_button_text"
         app:backgroundTint="@color/select_primary_button_tint"
         app:cornerRadius="8dp"

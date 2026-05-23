@@ -25,7 +25,7 @@
                     android:id="@+id/sw_replay_enable"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="启用回放记录"
+                    android:text="@string/setting_replay_recording"
                     android:textColor="@color/select_text_primary" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
@@ -45,7 +45,7 @@
                     style="@style/SelectSectionTitle"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="回放管理" />
+                    android:text="@string/section_replay_manage" />
 
                 <LinearLayout
                     android:layout_width="match_parent"
@@ -58,7 +58,7 @@
                         style="@style/SelectTextButton"
                         android:layout_width="wrap_content"
                         android:layout_height="48dp"
-                        android:text="导入"
+                        android:text="@string/action_import"
                         android:textSize="14sp" />
 
                     <com.google.android.material.button.MaterialButton
@@ -67,7 +67,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="48dp"
                         android:layout_marginStart="6dp"
-                        android:text="导出"
+                        android:text="@string/action_export"
                         android:textSize="14sp" />
 
                     <com.google.android.material.button.MaterialButton
@@ -76,7 +76,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="48dp"
                         android:layout_marginStart="6dp"
-                        android:text="删除"
+                        android:text="@string/action_delete"
                         android:textSize="14sp" />
                 </LinearLayout>
 

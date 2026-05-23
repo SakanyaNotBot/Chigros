@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Chigros</string>
+
+    <string name="tab_chart">Chart</string>
+    <string name="tab_video">Video</string>
+    <string name="tab_audio">Audio</string>
+    <string name="tab_replay">Replay</string>
+
+    <string name="title_chart_settings">Chart Settings</string>
+    <string name="title_video_settings">Video Settings</string>
+    <string name="title_audio_settings">Audio Settings</string>
+    <string name="title_replay_settings">Replay Settings</string>
+
+    <string name="action_start">Start</string>
+    <string name="action_start_autoplay">Start Auto</string>
+    <string name="action_import">Import</string>
+    <string name="action_export">Export</string>
+    <string name="action_delete">Delete</string>
+    <string name="action_cancel">Cancel</string>
+
+    <string name="state_not_selected">Not selected</string>
+    <string name="chart_pack">Chart Pack</string>
+    <string name="action_pick_zip_pack">Choose ZIP Chart Pack</string>
+    <string name="section_pick_files">Choose Files Separately</string>
+    <string name="status_music">Music: %1$s</string>
+    <string name="status_chart">Chart: %1$s</string>
+    <string name="status_background">Background: %1$s</string>
+    <string name="status_music_not_selected">Music: Not selected</string>
+    <string name="status_chart_not_selected">Chart: Not selected</string>
+    <string name="status_background_not_selected">Background: Not selected</string>
+    <string name="action_pick_music">Choose Music</string>
+    <string name="action_pick_chart">Choose Chart File</string>
+    <string name="action_pick_background">Choose Background Image</string>
+    <string name="section_chart_info">Chart Info</string>
+    <string name="hint_song_name">Song Name</string>
+    <string name="hint_difficulty">Difficulty</string>
+    <string name="hint_chart_offset_ms">Chart Offset (ms)</string>
+    <string name="pack_loaded">Loaded: %1$s</string>
+    <string name="pack_item_music">Music</string>
+    <string name="pack_item_chart">Chart</string>
+    <string name="pack_item_background">Background</string>
+
+    <string name="section_skin">Skin</string>
+    <string name="hint_select_skin">Choose Skin</string>
+    <string name="section_aspect_ratio">Stage Aspect Ratio</string>
+    <string name="hint_aspect_decimal">Decimal Ratio</string>
+    <string name="hint_preset">Preset</string>
+    <string name="section_key_scale">Note Size</string>
+    <string name="section_scroll_speed">Note Speed</string>
+    <string name="option_follow_screen">Follow Screen Ratio</string>
+    <string name="option_manual_input">Manual Input</string>
+    <string name="setting_mirror_x">Mirror Demo (X Axis)</string>
+    <string name="setting_autoplay">Autoplay</string>
+    <string name="setting_challenge_mode">Challenge Mode</string>
+    <string name="setting_background_brightness">Background Dim</string>
+    <string name="setting_low_res_mode">Low Resolution Mode</string>
+    <string name="setting_antialias">Anti-aliasing</string>
+    <string name="setting_show_fps">Show FPS</string>
+    <string name="setting_show_debug">Show Debug Info</string>
+    <string name="setting_multi_highlight">Highlight simul. notes</string>
+    <string name="setting_apfc_indicator">AP / FC Indicator</string>
+
+    <string name="section_music_volume">Music Volume</string>
+    <string name="section_sfx_volume">Hitsound Volume</string>
+    <string name="section_music_speed">Music Speed</string>
+
+    <string name="setting_replay_recording">Enable Replay Recording</string>
+    <string name="section_replay_manage">Replay Management</string>
+    <string name="replay_empty">No replay records</string>
+    <string name="dialog_confirm_delete">Confirm Delete</string>
+    <string name="dialog_delete_replay_message">Delete the selected %1$d replays?</string>
+    <string name="toast_replay_export_success">Exported %1$d replays to Download/Chigros/</string>
+    <string name="toast_replay_export_failed">Export failed: %1$s</string>
+    <string name="toast_replay_data_corrupt">Replay data is corrupted</string>
+    <string name="toast_replay_resources_incomplete">Replay resources are incomplete</string>
+    <string name="toast_replay_import_success">Replay imported</string>
+    <string name="toast_replay_import_failed">Replay import failed: %1$s</string>
+    <string name="toast_replay_load_failed">Replay load failed: %1$s</string>
+    <string name="toast_replay_cache_missing">Replay cache does not exist</string>
+    <string name="toast_replay_already_saved">Replay already saved</string>
+    <string name="toast_replay_saved">Replay saved</string>
+    <string name="toast_replay_save_failed">Replay save failed: %1$s</string>
+
+    <string name="toast_pick_required_files">Choose music, chart, and background first</string>
+    <string name="toast_fill_song_info">Fill in song name and difficulty on the Chart tab</string>
+    <string name="toast_copy_music_failed">Music copy failed: %1$s</string>
+    <string name="toast_copy_chart_failed">Chart copy failed: %1$s</string>
+    <string name="toast_copy_background_failed">Background copy failed: %1$s</string>
+    <string name="toast_pack_parse_success">Package parsed</string>
+    <string name="toast_pack_too_large">Package is too large to load</string>
+    <string name="toast_pack_failed">Package processing failed: %1$s</string>
+    <string name="toast_skin_import_success">Skin imported</string>
+    <string name="toast_skin_import_failed">Skin import failed: %1$s</string>
+    <string name="skin_builtin">Built-in Skin</string>
+    <string name="error_create_skin_dir">Unable to create skin directory</string>
+
+    <string name="loading_play">Loading...\n(Parsing chart and decoding audio)</string>
+    <string name="error_audio_too_large">Audio file is too large to decode. Try a smaller audio file.</string>
+    <string name="error_chart_too_large">Chart file is too large to parse</string>
+    <string name="toast_load_oom">Not enough memory to load this chart. The file is too large.</string>
+    <string name="toast_load_failed">Load failed: %1$s</string>
+    <string name="error_create_replay_dir">Unable to create replay directory</string>
+    <string name="error_create_temp_dir">Unable to create temporary directory</string>
+    <string name="error_replay_missing_json">Replay file is corrupted: missing replay.json</string>
+    <string name="error_replay_missing_chart">Replay file is corrupted: missing chart file</string>
+    <string name="error_replay_missing_audio">Replay file is corrupted: missing audio file</string>
+    <string name="error_replay_missing_image">Replay file is corrupted: missing image file</string>
+    <string name="error_replay_json_not_found">Replay file is corrupted: replay.json not found</string>
+
+    <string name="combo_replay">REPLAY</string>
+    <string name="combo_autoplay">AUTOPLAY</string>
+    <string name="combo_combo">COMBO</string>
+
+    <string name="result_accuracy">ACCURACY</string>
+    <string name="result_max_combo">MAX COMBO</string>
+    <string name="result_std_deviation">STD DEVIATION</string>
+    <string name="result_perfect">PERFECT</string>
+    <string name="result_good">GOOD</string>
+    <string name="result_bad">BAD</string>
+    <string name="result_miss">MISS</string>
+    <string name="result_early">EARLY</string>
+    <string name="result_late">LATE</string>
+</resources>

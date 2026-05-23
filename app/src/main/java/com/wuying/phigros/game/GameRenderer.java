@@ -389,6 +389,39 @@ public class GameRenderer implements GLSurfaceView.Renderer {
     private String hudDifficultySourceText;
     private int hudLastScoreValue = Integer.MIN_VALUE;
     private int hudLastComboValue = Integer.MIN_VALUE;
+    private static final String HUD_FONT_ASSET = "res/phigros.ttf";
+
+    // Official Phigros level HUD uses a world-space UI whose logical height is 1000.
+    // LevelUICont.Update clamps the usable HUD width to 16:9 and positions corner HUD
+    // elements with these local-coordinate constants.
+    private static final float OFFICIAL_HUD_MAX_ASPECT = 16f / 9f;
+    private static final float OFFICIAL_HUD_HALF_HEIGHT = 500f;
+    private static final float OFFICIAL_HUD_PAUSE_X_OFFSET = 50.5887985f;
+    private static final float OFFICIAL_HUD_PAUSE_Y = 444.2999878f;
+    private static final float OFFICIAL_HUD_PAUSE_W = 34.262f;
+    private static final float OFFICIAL_HUD_PAUSE_H = 37.966f;
+    // Official Pause.asset is drawn with the tight sprite aspect (35x41), not stretched to sizeDelta.
+    private static final float OFFICIAL_HUD_PAUSE_VISUAL_ASPECT = 35f / 41f;
+    private static final float OFFICIAL_HUD_SCORE_X_OFFSET = -237.3887939f;
+    private static final float OFFICIAL_HUD_SCORE_Y = 445.7000122f;
+    private static final float OFFICIAL_HUD_SCORE_W = 400f;
+    private static final float OFFICIAL_HUD_COMBO_Y = 452f;
+    private static final float OFFICIAL_HUD_COMBO_TEXT_Y = 405f;
+    private static final float OFFICIAL_HUD_SONG_X_OFFSET = 40f;
+    private static final float OFFICIAL_HUD_SONG_Y = -473.2000122f;
+    private static final float OFFICIAL_HUD_SONG_W = 650f;
+    private static final float OFFICIAL_HUD_LEVEL_X_OFFSET = -40f;
+    private static final float OFFICIAL_HUD_LEVEL_Y = -473.2000122f;
+    private static final float OFFICIAL_HUD_LEVEL_W = 650f;
+    private static final float OFFICIAL_HUD_PROGRESS_Y = 500f;
+    private static final float OFFICIAL_HUD_PROGRESS_W = 1919f;
+    private static final float OFFICIAL_HUD_PROGRESS_H = 11f;
+    private static final float OFFICIAL_HUD_BOTTOM_TEXT_Y_FIX_AT_1080PX = 5f;
+    private static final float OFFICIAL_HUD_BOTTOM_TEXT_SIZE = 36f;
+    private static final float OFFICIAL_HUD_SCORE_TEXT_SIZE = 50f;
+    private static final float OFFICIAL_HUD_COMBO_NUMBER_TEXT_SIZE = 70f;
+    private static final float OFFICIAL_HUD_COMBO_LABEL_TEXT_SIZE = 24f;
+    private static final String HUD_LEGACY_TEXT_FONT_FEATURES = "'kern' 0, 'liga' 0, 'clig' 0";
 
     private Texture[][] noteHeadTex = new Texture[5][2]; // [type][morebets]
     private Texture texHold;   // hold.png
@@ -690,11 +723,7 @@ public class GameRenderer implements GLSurfaceView.Renderer {
         }
 
         // HUD font (used for score/combo/song/diff text rendered in GL).
-        try {
-            this.hudTypeface = Typeface.createFromAsset(this.context.getAssets(), "res/phigros.ttf");
-        } catch (Throwable t) {
-            this.hudTypeface = Typeface.DEFAULT;
-        }
+        this.hudTypeface = Typeface.createFromAsset(context.getAssets(), HUD_FONT_ASSET);
         hudTextPaint.setColor(Color.WHITE);
         hudTextPaint.setTypeface(hudTypeface);
         hudTextPaint.setTextAlign(Paint.Align.LEFT);
@@ -1363,12 +1392,31 @@ public class GameRenderer implements GLSurfaceView.Renderer {
             return 0; // Too far, no match
         }
 
-        // For Hold, the max window is goodTimeRange
-        if (n.type == GameConstants.NOTE_HOLD) {
-            window = Math.min(window, getGoodWindowSec());
+        return window;
+    }
+
+    static boolean officialCheckNoteCandidateReplaces(boolean hasCurrent,
+                                                       int currentType,
+                                                       double currentAbsDeltaSec,
+                                                       int candidateType,
+                                                       double candidateDeltaSec,
+                                                       double candidateAbsDeltaSec,
+                                                       double currentJudgeDistance,
+                                                       double candidateJudgeDistance) {
+        if (!hasCurrent) return true;
+
+        boolean currentTapHold = currentType == GameConstants.NOTE_TAP || currentType == GameConstants.NOTE_HOLD;
+        boolean candidateTapHold = candidateType == GameConstants.NOTE_TAP || candidateType == GameConstants.NOTE_HOLD;
+
+        if (currentTapHold && candidateTapHold
+                && Math.abs(candidateAbsDeltaSec - currentAbsDeltaSec) <= 0.01
+                && candidateJudgeDistance < currentJudgeDistance) {
+            return true;
         }
 
-        return window;
+        if (candidateDeltaSec >= currentAbsDeltaSec + 0.01) return false;
+
+        return currentType == GameConstants.NOTE_DRAG || currentType == GameConstants.NOTE_FLICK;
     }
 
     /** Per-type late Miss threshold (how late a note can be before forced Miss). */
@@ -1773,14 +1821,15 @@ public class GameRenderer implements GLSurfaceView.Renderer {
             }
         }
 
-        // UI rects based on stage (match margins)
-        float lineScale = stageW > stageH * 0.75f ? (stageH / 18.75f) : (stageW / 14.0625f);
-
-        float pauseW = stageW * (35.0f / 1920.0f);
-        float pauseAr = (texPause != null && texPause.height > 0) ? (texPause.width / (float) texPause.height) : 1f;
-        float pauseH = pauseW / pauseAr;
-        float pauseX = stageL + stageW * (36.0f / 1920.0f);
-        float pauseY = stageT + stageH * (41.0f / 1080.0f);
+        // Official Level.unity RectTransform:
+        // Pause localPosition = (50.5888 - halfUiW, 444.3), sizeDelta = 34.262 x 37.966.
+        float halfUiW = officialHudHalfUiW();
+        float pauseW = officialHudSize(OFFICIAL_HUD_PAUSE_W);
+        float pauseH = officialHudSize(OFFICIAL_HUD_PAUSE_H);
+        float pauseCx = officialHudX(OFFICIAL_HUD_PAUSE_X_OFFSET - halfUiW);
+        float pauseCy = officialHudY(OFFICIAL_HUD_PAUSE_Y);
+        float pauseX = pauseCx - pauseW * 0.5f;
+        float pauseY = pauseCy - pauseH * 0.5f;
         pauseRect.set(pauseX, pauseY, pauseX + pauseW, pauseY + pauseH);
         pauseHitPadPx = MathUtils.clamp(Math.max(pauseW, pauseH) * 1.1f, dp(20f), dp(80f));
 
@@ -3951,15 +4000,7 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
         Paint p = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.SUBPIXEL_TEXT_FLAG);
         p.setColor(0xFFFFFFFF);
         
-        // Try to load custom font
-        Typeface tf = null;
-        try {
-            tf = Typeface.createFromAsset(context.getAssets(), "res/phigros.ttf");
-        } catch (Exception e) {
-            // Fallback
-            tf = Typeface.DEFAULT;
-        }
-        p.setTypeface(tf);
+        p.setTypeface(Typeface.createFromAsset(context.getAssets(), HUD_FONT_ASSET));
         
         p.setTextAlign(Paint.Align.LEFT);
         textPaint = p;
@@ -4114,7 +4155,8 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
 
         // Re-render text if textContent is available
         if (t.textContent != null && t.textSizePx > 0f) {
-            Texture recreated = createHudTextTexture(t.textContent, t.textSizePx, false, false, false, false);
+            Texture recreated = createHudTextTexture(t.textContent, t.textSizePx, false, false, false, false,
+                    false, false, t.legacyCharacterAdvance);
             if (recreated != null) {
                 t.id = recreated.id;
                 t.width = recreated.width;
@@ -4154,29 +4196,46 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
     }
 
     private String ellipsizeToWidth(String text, float maxWidthPx, float textSizePx, boolean bold) {
+        return ellipsizeToWidth(text, maxWidthPx, textSizePx, bold, false);
+    }
+
+    private String ellipsizeToWidth(String text, float maxWidthPx, float textSizePx, boolean bold, boolean legacyCharacterAdvance) {
         if (text == null) return "";
         if (maxWidthPx <= 1f) return text;
 
         hudTextPaint.setTextSize(textSizePx);
         hudTextPaint.setFakeBoldText(bold);
-        if (hudTextPaint.measureText(text) <= maxWidthPx) return text;
-
-        final String ell = "...";
-        float ellW = hudTextPaint.measureText(ell);
-        if (ellW >= maxWidthPx) return ell;
-
-        int end = text.length();
-        while (end > 0) {
-            float w = hudTextPaint.measureText(text, 0, end);
-            if (w + ellW <= maxWidthPx) break;
-            end--;
+        float oldLetterSpacing = hudTextPaint.getLetterSpacing();
+        String oldFontFeatureSettings = hudTextPaint.getFontFeatureSettings();
+        if (legacyCharacterAdvance) {
+            hudTextPaint.setLetterSpacing(0f);
+            hudTextPaint.setFontFeatureSettings(HUD_LEGACY_TEXT_FONT_FEATURES);
         }
-        if (end <= 0) return ell;
-        return text.substring(0, end) + ell;
+        try {
+            float textWidth = measureHudTextWidth(text, legacyCharacterAdvance);
+            if (textWidth <= maxWidthPx) return text;
+
+            final String ell = "...";
+            float ellW = measureHudTextWidth(ell, legacyCharacterAdvance);
+            if (ellW >= maxWidthPx) return ell;
+
+            int end = text.length();
+            while (end > 0) {
+                float w = measureHudTextWidth(text.substring(0, end), legacyCharacterAdvance);
+                if (w + ellW <= maxWidthPx) break;
+                end--;
+            }
+            return end <= 0 ? ell : text.substring(0, end) + ell;
+        } finally {
+            if (legacyCharacterAdvance) {
+                hudTextPaint.setLetterSpacing(oldLetterSpacing);
+                hudTextPaint.setFontFeatureSettings(oldFontFeatureSettings);
+            }
+        }
     }
 
     private Texture createHudTextTexture(String text, float textSizePx, boolean bold) {
-        return createHudTextTexture(text, textSizePx, bold, true, false, false, false, false);
+        return createHudTextTexture(text, textSizePx, bold, false, false, false, false, false);
     }
 
     private Texture createHudTextTexture(String text, float textSizePx, boolean bold, boolean shadow, boolean trimHoriz, boolean trimVert) {
@@ -4188,108 +4247,160 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
     }
 
     private Texture createHudTextTexture(String text, float textSizePx, boolean bold, boolean shadow, boolean trimHoriz, boolean trimVert, boolean retainBitmap, boolean useFontTrueBottom) {
+        return createHudTextTexture(text, textSizePx, bold, shadow, trimHoriz, trimVert, retainBitmap, useFontTrueBottom, false);
+    }
+
+    private Texture createHudTextTexture(String text, float textSizePx, boolean bold, boolean shadow, boolean trimHoriz, boolean trimVert, boolean retainBitmap, boolean useFontTrueBottom, boolean legacyCharacterAdvance) {
         if (text == null) text = "";
         if (text.isEmpty()) text = " ";
 
-        hudTextPaint.setTextSize(textSizePx);
-        hudTextPaint.setFakeBoldText(bold);
-        hudTextPaint.setColor(0xFFFFFFFF);
+        float oldLetterSpacing = hudTextPaint.getLetterSpacing();
+        String oldFontFeatureSettings = hudTextPaint.getFontFeatureSettings();
+        try {
+            if (legacyCharacterAdvance) {
+                hudTextPaint.setLetterSpacing(0f);
+                hudTextPaint.setFontFeatureSettings(HUD_LEGACY_TEXT_FONT_FEATURES);
+            }
+            hudTextPaint.setTextSize(textSizePx);
+            hudTextPaint.setFakeBoldText(bold);
+            hudTextPaint.setColor(0xFFFFFFFF);
 
-        float shadowRadius = 0f;
-        float shadowDy = 0f;
-        if (shadow) {
-            shadowRadius = Math.max(1f, textSizePx * 0.12f);
-            shadowDy = Math.max(1f, textSizePx * 0.06f);
-            hudTextPaint.setShadowLayer(shadowRadius, 0f, shadowDy, 0x66000000);
-        } else {
+            float shadowRadius = 0f;
+            float shadowDy = 0f;
+            if (shadow) {
+                shadowRadius = Math.max(1f, textSizePx * 0.12f);
+                shadowDy = Math.max(1f, textSizePx * 0.06f);
+                hudTextPaint.setShadowLayer(shadowRadius, 0f, shadowDy, 0x66000000);
+            } else {
+                hudTextPaint.clearShadowLayer();
+            }
+
+            Rect bounds = new Rect();
+            hudTextPaint.getTextBounds(text, 0, text.length(), bounds);
+
+            Paint.FontMetrics fm = hudTextPaint.getFontMetrics();
+
+            int w;
+            if (trimHoriz) {
+                w = Math.max(1, bounds.width());
+                if (w <= 1) {
+                    w = Math.max(1, (int) Math.ceil(measureHudTextWidth(text, legacyCharacterAdvance)));
+                }
+            } else {
+                w = Math.max(1, (int) Math.ceil(measureHudTextWidth(text, legacyCharacterAdvance)));
+            }
+
+            int h;
+            int paddingBottom = 0;
+            float effectiveBottom = useFontTrueBottom ? Math.max(fm.descent, fm.bottom) : fm.descent;
+            if (trimVert) {
+                h = Math.max(1, bounds.height());
+            } else if (shadow) {
+                float bottomSpace = Math.max(effectiveBottom, shadowDy + shadowRadius);
+                h = Math.max(1, (int) Math.ceil(bottomSpace - fm.ascent));
+                paddingBottom = (int) Math.ceil(h - (fm.descent - fm.ascent));
+                if (paddingBottom < 0) paddingBottom = 0;
+            } else {
+                h = Math.max(1, (int) Math.ceil(effectiveBottom - fm.ascent));
+                paddingBottom = (int) Math.ceil(effectiveBottom - fm.descent);
+                if (paddingBottom < 0) paddingBottom = 0;
+            }
+
+            Bitmap bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
+            Canvas canvas = new Canvas(bmp);
+            canvas.drawARGB(0, 0, 0, 0);
+
+            float x = trimHoriz ? -bounds.left : 0f;
+            float y = trimVert ? -bounds.top : -fm.ascent;
+            drawHudText(canvas, text, x, y, hudTextPaint, legacyCharacterAdvance);
+
+            Texture tex = uploadBitmapAsTexture(bmp, retainBitmap);
+            if (tex != null) {
+                tex.paddingBottom = paddingBottom;
+                tex.legacyCharacterAdvance = legacyCharacterAdvance;
+                if (retainBitmap) {
+                    tex.textContent = text;
+                    tex.textSizePx = textSizePx;
+                }
+            }
+            return tex;
+        } finally {
             hudTextPaint.clearShadowLayer();
-        }
-
-        Rect bounds = new Rect();
-        hudTextPaint.getTextBounds(text, 0, text.length(), bounds);
-
-        Paint.FontMetrics fm = hudTextPaint.getFontMetrics();
-
-        int w;
-        if (trimHoriz) {
-            w = Math.max(1, bounds.width());
-            if (w <= 1) {
-                w = Math.max(1, (int) Math.ceil(hudTextPaint.measureText(text)));
-            }
-        } else {
-            w = Math.max(1, (int) Math.ceil(hudTextPaint.measureText(text)));
-        }
-
-        int h;
-        int paddingBottom = 0;
-        float effectiveBottom = useFontTrueBottom ? Math.max(fm.descent, fm.bottom) : fm.descent;
-        if (trimVert) {
-            h = Math.max(1, bounds.height());
-        } else if (shadow) {
-            float bottomSpace = Math.max(effectiveBottom, shadowDy + shadowRadius);
-            h = Math.max(1, (int) Math.ceil(bottomSpace - fm.ascent));
-            paddingBottom = (int) Math.ceil(h - (fm.descent - fm.ascent));
-            if (paddingBottom < 0) paddingBottom = 0;
-        } else {
-            h = Math.max(1, (int) Math.ceil(effectiveBottom - fm.ascent));
-            paddingBottom = (int) Math.ceil(effectiveBottom - fm.descent);
-            if (paddingBottom < 0) paddingBottom = 0;
-        }
-
-        Bitmap bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
-        Canvas canvas = new Canvas(bmp);
-        canvas.drawARGB(0, 0, 0, 0);
-
-        float x = trimHoriz ? -bounds.left : 0f;
-        float y = trimVert ? -bounds.top : -fm.ascent;
-        canvas.drawText(text, x, y, hudTextPaint);
-
-        hudTextPaint.clearShadowLayer();
-
-        Texture tex = uploadBitmapAsTexture(bmp, retainBitmap);
-        if (tex != null) {
-            tex.paddingBottom = paddingBottom;
-            if (retainBitmap) {
-                tex.textContent = text;
-                tex.textSizePx = textSizePx;
+            if (legacyCharacterAdvance) {
+                hudTextPaint.setLetterSpacing(oldLetterSpacing);
+                hudTextPaint.setFontFeatureSettings(oldFontFeatureSettings);
             }
         }
-        return tex;
+    }
+
+    private float measureHudTextWidth(String text, boolean legacyCharacterAdvance) {
+        if (text == null || text.isEmpty()) return 0f;
+        if (!legacyCharacterAdvance) return hudTextPaint.measureText(text);
+
+        float width = 0f;
+        int offset = 0;
+        int length = text.length();
+        while (offset < length) {
+            int next = offset + Character.charCount(text.codePointAt(offset));
+            width += hudTextPaint.measureText(text, offset, next);
+            offset = next;
+        }
+        return width;
+    }
+
+    private void drawHudText(Canvas canvas, String text, float x, float y, Paint paint, boolean legacyCharacterAdvance) {
+        if (!legacyCharacterAdvance) {
+            canvas.drawText(text, x, y, paint);
+            return;
+        }
+
+        float cursorX = x;
+        int offset = 0;
+        int length = text.length();
+        while (offset < length) {
+            int next = offset + Character.charCount(text.codePointAt(offset));
+            canvas.drawText(text, offset, next, cursorX, y, paint);
+            cursorX += paint.measureText(text, offset, next);
+            offset = next;
+        }
     }
 
     private void updateHudTextTexturesIfNeeded() {
-        // Same lineScale logic as PlayActivity#applyOverlayStageLayout (compatible).
-        float lineScale = (stageW > stageH * 0.75f) ? (stageH / 18.75f) : (stageW / 14.0625f);
-        if (lineScale <= 0f) return;
+        float hudUnitPx = officialHudUnitPx();
+        if (hudUnitPx <= 0f) return;
 
         // Recreate textures if scale changed (e.g., surface resize).
-        if (hudLastLineScalePx <= 0f || Math.abs(lineScale - hudLastLineScalePx) > 0.5f) {
+        if (hudLastLineScalePx <= 0f || Math.abs(hudUnitPx - hudLastLineScalePx) > 0.0025f) {
             clearHudTextTextures();
-            hudLastLineScalePx = lineScale;
+            hudLastLineScalePx = hudUnitPx;
         }
 
-        float bottomTextPx = (stageW + stageH) / 86.25f;
-        float scorePx = (stageW + stageH) / 56.25f;
-        // In fix mode, combo number uses larger size (size=1.0), legacy uses default.
-        boolean useFixMode = (chart != null && chart.useAttachUiFix);
-        float comboNumPx = MathUtils.clamp(lineScale * 1.3f, dp(22f), dp(62f));
-        float comboLabelPx = MathUtils.clamp(lineScale * 0.4f, dp(8f), dp(21f));
-        float difficultyPx = (stageW + stageH) / 86.25f;
+        float bottomTextPx = officialHudSize(OFFICIAL_HUD_BOTTOM_TEXT_SIZE);
+        float scorePx = officialHudSize(OFFICIAL_HUD_SCORE_TEXT_SIZE);
+        float comboNumPx = officialHudSize(OFFICIAL_HUD_COMBO_NUMBER_TEXT_SIZE);
+        float comboLabelPx = officialHudSize(OFFICIAL_HUD_COMBO_LABEL_TEXT_SIZE);
+        float difficultyPx = bottomTextPx;
 
         // Song title (bottom-left)
         String songSource = songName;
         if (hudTexSongTitle == null || hudSongTitleSourceText == null || !hudSongTitleSourceText.equals(songSource)) {
-            float songMaxW = stageW * 0.50f;
+            float songMaxW = officialHudSize(OFFICIAL_HUD_SONG_W);
             float actualSongSizePx = bottomTextPx;
+            float oldLetterSpacing = hudTextPaint.getLetterSpacing();
+            String oldFontFeatureSettings = hudTextPaint.getFontFeatureSettings();
             hudTextPaint.setTextSize(bottomTextPx);
             hudTextPaint.setFakeBoldText(false);
-            float textW = hudTextPaint.measureText(songSource);
+            hudTextPaint.setLetterSpacing(0f);
+            hudTextPaint.setFontFeatureSettings(HUD_LEGACY_TEXT_FONT_FEATURES);
+            float textW = measureHudTextWidth(songSource, true);
+            hudTextPaint.setLetterSpacing(oldLetterSpacing);
+            hudTextPaint.setFontFeatureSettings(oldFontFeatureSettings);
             if (textW > songMaxW) {
                 float scale = songMaxW / textW;
                 actualSongSizePx = bottomTextPx * scale;
             }
             deleteGlTexture(hudTexSongTitle);
-            hudTexSongTitle = createHudTextTexture(songSource, actualSongSizePx, false, false, false, false, false, true);
+            hudTexSongTitle = createHudTextTexture(songSource, actualSongSizePx, false, false, false, false, false, true, true);
             hudSongTitleText = songSource;
             hudSongTitleSourceText = songSource;
             hudLastSongTextSize = actualSongSizePx;
@@ -4297,10 +4408,10 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
 
         // Difficulty (bottom-right)
         if (hudTexDifficulty == null || hudDifficultySourceText == null || !hudDifficultySourceText.equals(difficulty)) {
-            float diffMaxW = stageW * 0.35f;
-            String diffText = ellipsizeToWidth(difficulty, diffMaxW, difficultyPx, false);
+            float diffMaxW = officialHudSize(OFFICIAL_HUD_LEVEL_W);
+            String diffText = ellipsizeToWidth(difficulty, diffMaxW, difficultyPx, false, true);
             deleteGlTexture(hudTexDifficulty);
-            hudTexDifficulty = createHudTextTexture(diffText, difficultyPx, false, false, false, false, false, true);
+            hudTexDifficulty = createHudTextTexture(diffText, difficultyPx, false, false, false, false, false, true, true);
             hudDifficultyText = diffText;
             hudDifficultySourceText = difficulty;
         }
@@ -4310,7 +4421,7 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
         if (hudTexScore == null || hudLastScoreValue != scoreVal) {
             String scoreStr = formatScore7(scoreVal);
             deleteGlTexture(hudTexScore);
-            hudTexScore = createHudTextTexture(scoreStr, scorePx, false, true, false, false);
+            hudTexScore = createHudTextTexture(scoreStr, scorePx, false, false, false, false);
             hudScoreText = scoreStr;
             hudLastScoreValue = scoreVal;
         }
@@ -4334,7 +4445,7 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
             }
             if (hudTexComboLabel == null || hudComboLabelText == null || !hudComboLabelText.equals(comboLabel)) {
                 deleteGlTexture(hudTexComboLabel);
-                hudTexComboLabel = createHudTextTexture(comboLabel, comboLabelPx, false, true, true, true);
+                hudTexComboLabel = createHudTextTexture(comboLabel, comboLabelPx, false, false, true, true);
                 hudComboLabelText = comboLabel;
             }
         } else {
@@ -4353,21 +4464,29 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
 
         if (lineScale <= 0f) return;
 
-        // Song title (bottom-left, phispler: x=w*0.0225, y=h*0.965, textBaseline=bottom, textAlign=left)
+        float halfUiW = officialHudHalfUiW();
+        float hudUnitPx = officialHudUnitPx();
+
+        // Song title: LevelUICont positions SongNameCanvas at (40 - halfUiW, -473.2),
+        // RectTransform size 650x46, pivot bottom-left.
+        float bottomTextYOffsetPx = officialHudBottomTextYOffsetPx();
         if (hudTexSongTitle != null) {
-            float x = stageL + stageW * 0.0225f;
-            float y = stageT + stageH * 0.965f - (hudTexSongTitle.height - hudTexSongTitle.paddingBottom);
+            float left = officialHudX(OFFICIAL_HUD_SONG_X_OFFSET - halfUiW);
+            float bottom = officialHudY(OFFICIAL_HUD_SONG_Y) - bottomTextYOffsetPx;
+            float y = bottom - (hudTexSongTitle.height - hudTexSongTitle.paddingBottom);
             applyUiTransformAndDraw(hudTexSongTitle,
-                    x + hudTexSongTitle.width * 0.5f,
+                    left + hudTexSongTitle.width * 0.5f,
                     y + hudTexSongTitle.height * 0.5f,
                     hudTexSongTitle.width, hudTexSongTitle.height,
                     UI_ELEMENT_NAME, hudAlpha, slideAmount, chartTimeSec, stageAspect, lineScale);
         }
 
-        // Difficulty (bottom-right, phispler: x=w*0.9775, y=h*0.965, textBaseline=bottom, textAlign=right)
+        // Difficulty: localPosition = (halfUiW - 40, -473.2), size 650x46, pivot bottom-right.
         if (hudTexDifficulty != null) {
-            float x = stageL + stageW * 0.9775f - hudTexDifficulty.width;
-            float y = stageT + stageH * 0.965f - (hudTexDifficulty.height - hudTexDifficulty.paddingBottom);
+            float right = officialHudX(halfUiW + OFFICIAL_HUD_LEVEL_X_OFFSET);
+            float bottom = officialHudY(OFFICIAL_HUD_LEVEL_Y) - bottomTextYOffsetPx;
+            float x = right - hudTexDifficulty.width;
+            float y = bottom - (hudTexDifficulty.height - hudTexDifficulty.paddingBottom);
             applyUiTransformAndDraw(hudTexDifficulty,
                     x + hudTexDifficulty.width * 0.5f,
                     y + hudTexDifficulty.height * 0.5f,
@@ -4375,10 +4494,15 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
                     UI_ELEMENT_LEVEL, hudAlpha, slideAmount, chartTimeSec, stageAspect, lineScale);
         }
 
-        // Score (top-right, phispler: x=w*(1-40/1920), y=h*(31/1080), textBaseline=top, textAlign=right)
+        // Score: localPosition = (halfUiW - 237.3888, 445.7), size 400x100, pivot center.
+        // The rect's right edge is the official score anchor near the top-right.
         if (hudTexScore != null) {
-            float x = stageL + stageW * (1.0f - 40.0f / 1920.0f) - hudTexScore.width;
-            float y = stageT + stageH * (31.0f / 1080.0f);
+            float rectCx = officialHudX(halfUiW + OFFICIAL_HUD_SCORE_X_OFFSET);
+            float rectCy = officialHudY(OFFICIAL_HUD_SCORE_Y);
+            float rectW = OFFICIAL_HUD_SCORE_W * hudUnitPx;
+            float rectRight = rectCx + rectW * 0.5f;
+            float x = rectRight - hudTexScore.width;
+            float y = rectCy - hudTexScore.height * 0.5f;
             applyUiTransformAndDraw(hudTexScore,
                     x + hudTexScore.width * 0.5f,
                     y + hudTexScore.height * 0.5f,
@@ -4386,18 +4510,16 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
                     UI_ELEMENT_SCORE, hudAlpha, slideAmount, chartTimeSec, stageAspect, lineScale);
         }
 
-        // Combo
+        // Combo: number and label are separate centered RectTransforms.
         if (combo >= 3 && hudTexComboNum != null && hudTexComboLabel != null) {
-            float centerX = stageL + stageW * 0.5f;
-            float topY = stageT + lineScale * 0.275f;
-            float spacing = Math.max(0f, lineScale * 0.065f);
-            float numCenterY = topY + hudTexComboNum.height * 0.5f;
+            float centerX = officialHudX(0f);
+            float numCenterY = officialHudY(OFFICIAL_HUD_COMBO_Y);
             applyUiTransformAndDraw(hudTexComboNum,
                     centerX, numCenterY,
                     hudTexComboNum.width, hudTexComboNum.height,
                     UI_ELEMENT_COMBO_NUMBER, hudAlpha, slideAmount, chartTimeSec, stageAspect, lineScale);
 
-            float labelCenterY = numCenterY + hudTexComboNum.height * 0.5f + spacing + hudTexComboLabel.height * 0.5f;
+            float labelCenterY = officialHudY(OFFICIAL_HUD_COMBO_TEXT_Y);
             applyUiTransformAndDraw(hudTexComboLabel,
                     centerX, labelCenterY,
                     hudTexComboLabel.width, hudTexComboLabel.height,
@@ -4417,6 +4539,31 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
 
     private static float clamp01(float v) {
         return v < 0f ? 0f : (v > 1f ? 1f : v);
+    }
+
+    private float officialHudUnitPx() {
+        return stageH > 0f ? stageH / 1000f : 1f;
+    }
+
+    private float officialHudHalfUiW() {
+        float aspect = (stageH > 1e-6f) ? (stageW / stageH) : OFFICIAL_HUD_MAX_ASPECT;
+        return Math.min(aspect, OFFICIAL_HUD_MAX_ASPECT) * OFFICIAL_HUD_HALF_HEIGHT;
+    }
+
+    private float officialHudX(float uiX) {
+        return stageL + stageW * 0.5f + uiX * officialHudUnitPx();
+    }
+
+    private float officialHudY(float uiY) {
+        return stageT + stageH * 0.5f - uiY * officialHudUnitPx();
+    }
+
+    private float officialHudSize(float uiSize) {
+        return uiSize * officialHudUnitPx();
+    }
+
+    private float officialHudBottomTextYOffsetPx() {
+        return OFFICIAL_HUD_BOTTOM_TEXT_Y_FIX_AT_1080PX * stageH / 1080f;
     }
 
     private static String formatScore7(int v) {
@@ -4636,7 +4783,9 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
         if (texPause != null) {
             float cx = pauseRect.left + pauseRect.width() * 0.5f;
             float cy = pauseRect.top + pauseRect.height() * 0.5f;
-            applyUiTransformAndDraw(texPause, cx, cy, pauseRect.width(), pauseRect.height(),
+            float drawH = pauseRect.height();
+            float drawW = drawH * OFFICIAL_HUD_PAUSE_VISUAL_ASPECT;
+            applyUiTransformAndDraw(texPause, cx, cy, drawW, drawH,
                     UI_ELEMENT_PAUSE, hudAlpha, slideAmount, chartTimeSec, stageAspect, lineScale);
         }
 
@@ -4892,35 +5041,36 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
 
     private void drawTimerLine(float hudAlpha, float slideAmount, double chartTimeSec, float stageAspect, float lineScale) {
         if (texTimerLine == null) return;
-        // TimerLine scrolls from left to right.
-        final float srcW = 960f;
-        final float srcH = 5f;
 
         double musicPos = NativeAudioEngine.getPlayheadSeconds();
         float progress = (float) (musicPos / totalTimeSec);
         progress = MathUtils.clamp(progress, 0f, 1f);
 
-        // Keep a minimum visible piece
-        final float minPx = 2f;
-        float visiblePx = minPx + progress * (srcW - minPx);
-        float visibleRatio = MathUtils.clamp(visiblePx / srcW, 0f, 1f);
+        // Official ProgressControl.Update:
+        // progressBar.localPosition.x = halfUiW * (progress * 2 - 1).
+        // Level.unity: sizeDelta = 1919x11, pivot=(1,1), localPosition.y=500.
+        float halfUiW = officialHudHalfUiW();
+        float barW = officialHudSize(OFFICIAL_HUD_PROGRESS_W);
+        float barH = officialHudSize(OFFICIAL_HUD_PROGRESS_H);
+        float pivotRightX = officialHudX(halfUiW * (progress * 2f - 1f));
+        float pivotTopY = officialHudY(OFFICIAL_HUD_PROGRESS_Y);
+        float left = pivotRightX - barW;
+        float top = pivotTopY;
 
-        // Progress bar spans the full stage width and starts at (stageL, stageT)
-        float fullW = stageW;
-        float barH = stageH / 95.0f;
+        float clipLeft = stageL;
+        float clipRight = Math.min(stageL + stageW, pivotRightX);
+        if (clipRight <= clipLeft) return;
 
-        float visibleW = fullW * visibleRatio;
-        float x = stageL;
-        float y = stageT;
+        float drawLeft = Math.max(left, clipLeft);
+        float drawW = clipRight - drawLeft;
+        if (drawW <= 0.5f) return;
 
-        // Draw right-aligned portion of the texture
-        float u0 = 1f - visibleRatio;
-        float u1 = 1f;
+        float u0 = MathUtils.clamp((drawLeft - left) / barW, 0f, 1f);
+        float u1 = MathUtils.clamp((clipRight - left) / barW, 0f, 1f);
+        float cx = drawLeft + drawW * 0.5f;
+        float cy = top + barH * 0.5f;
 
-        float cx = x + visibleW * 0.5f;
-        float cy = y + barH * 0.5f;
-
-        applyUiTransformAndDrawUv(texTimerLine, cx, cy, visibleW, barH,
+        applyUiTransformAndDrawUv(texTimerLine, cx, cy, drawW, barH,
                 UI_ELEMENT_BAR, hudAlpha, slideAmount, chartTimeSec, stageAspect,
                 u0, 0f, u1, 1f, lineScale);
     }
@@ -5073,7 +5223,8 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
                                     if (re.j == 0) {
                                         spawnHoldHeadHitEffect(n, re.ts, skinPColor[0], skinPColor[1], skinPColor[2], skinPAlpha, 4);
                                     } else {
-                                        spawnHoldHeadHitEffect(n, re.ts, skinGColor[0], skinGColor[1], skinGColor[2], skinGAlpha, 3);
+                                        spawnHoldHeadHitEffect(n, re.ts, skinGColor[0], skinGColor[1], skinGColor[2], skinGAlpha, 3,
+                                                re.ts < n.sect);
                                     }
                                 }
                             } else {
@@ -5177,13 +5328,12 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
             float offsetX; float offsetY;
             int type;          // 1=Click, 2=Hold/Drag, 3=Flick/Move
             boolean judged;
-            boolean preventBad;
             FlickTracker event; // Flick tracker reference (type 3 only)
             int touchId;
 
             JudgeEvent(float ox, float oy, int type, FlickTracker evt, int tid) {
                 this.offsetX = ox; this.offsetY = oy; this.type = type;
-                this.judged = false; this.preventBad = false;
+                this.judged = false;
                 this.event = evt; this.touchId = tid;
             }
         }
@@ -5212,7 +5362,6 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
         // Sets note.isJudged=1 for the winner; loser notes wait (protection mechanism).
         // Scan window: [nowTime - goodTimeRange, nowTime + badTimeRange] = [-0.18, +0.22]
         // Type priority (±0.01s): Tap/Hold > Drag/Flick
-        java.util.Map<Integer, Note> checkNoteSelections = new java.util.HashMap<>();
         try {
         for (JudgeEvent je : judgeList) {
             if (je.type != 1) continue; // Only new touches
@@ -5220,8 +5369,7 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
 
             Note bestNote = null;
             double bestAbsTimeDiff = Double.MAX_VALUE;
-            float bestSpatialDist = Float.MAX_VALUE;
-            int bestTypePriority = 0; // 2 = Tap/Hold, 1 = Drag/Flick
+            float bestJudgeDistance = Float.MAX_VALUE;
 
             for (int i = judgeCursor; i < nSize; i++) {
                 Note note = notes.get(i);
@@ -5229,9 +5377,15 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
                 if (note.isJudged) continue; // Already assigned to another finger (multi-touch fix)
                 if (note.holdActive) continue;
                 if (note.sect > horizon) break;
-                // CheckNote for type 1 (click) events only selects Tap/Hold;
-                // Drag/Flick use their own per-frame continuous/flick matching
-                if (note.type != GameConstants.NOTE_TAP && note.type != GameConstants.NOTE_HOLD) continue;
+                // Official CheckNote scans all four note types. In non-challenge
+                // mode, a selected Drag/Flick consumes this touch-down so it
+                // cannot also mark a later Tap/Hold head as Bad.
+                if (note.type != GameConstants.NOTE_TAP
+                        && note.type != GameConstants.NOTE_HOLD
+                        && note.type != GameConstants.NOTE_DRAG
+                        && note.type != GameConstants.NOTE_FLICK) {
+                    continue;
+                }
 
                 double deltaTime = note.sect - tChart;
 
@@ -5250,36 +5404,28 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
                 if (deltaTime > spatialWindow) continue; // Note is too far past now (late)
 
                 double absDt = Math.abs(deltaTime);
-                int typePriority = (note.type == GameConstants.NOTE_TAP || note.type == GameConstants.NOTE_HOLD) ? 2 : 1;
+                float judgeDistance = getJudgeDistance(je.offsetX, je.offsetY, note, tChart, stageAspect);
+                if (!Float.isFinite(judgeDistance)) judgeDistance = touchPos;
 
-                // Select best candidate
-                boolean isBetter = false;
-                if (bestNote == null) {
-                    isBetter = true;
-                } else if (absDt < bestAbsTimeDiff - 0.009) {
-                    // Significantly closer in time (>0.01 ahead → clear win)
-                    isBetter = true;
-                } else if (Math.abs(absDt - bestAbsTimeDiff) <= 0.01) {
-                    // Within ±0.01s: type priority first, then spatial distance
-                    if (typePriority > bestTypePriority) {
-                        isBetter = true;
-                    } else if (typePriority == bestTypePriority && touchPos < bestSpatialDist) {
-                        isBetter = true;
-                    }
-                }
-
-                if (isBetter) {
+                if (officialCheckNoteCandidateReplaces(bestNote != null,
+                        bestNote != null ? bestNote.type : 0,
+                        bestAbsTimeDiff,
+                        note.type,
+                        deltaTime,
+                        absDt,
+                        bestJudgeDistance,
+                        judgeDistance)) {
                     bestNote = note;
                     bestAbsTimeDiff = absDt;
-                    bestSpatialDist = touchPos;
-                    bestTypePriority = typePriority;
+                    bestJudgeDistance = judgeDistance;
                 }
             }
 
             if (bestNote != null) {
-                bestNote.isJudged = true;
-                checkNoteSelections.put(je.touchId, bestNote);
                 je.judged = true; // Consume this touch
+                if (bestNote.type != GameConstants.NOTE_FLICK) {
+                    bestNote.isJudged = true;
+                }
             }
         }
         } catch (Throwable t) { /* prevent crash */ }
@@ -5291,17 +5437,6 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
         for (JudgeEvent je : judgeList) {
             if (je.type == 1) {
                 startedTouchIds.remove(je.touchId);
-            }
-        }
-
-        // Build reverse map: Note → JudgeEvent (for preventBad lookup in Phase 5)
-        // Maps each CheckNote-selected note back to the type-1 judge event that selected it
-        java.util.Map<Note, JudgeEvent> noteToJudgeEvent = new java.util.HashMap<>();
-        for (JudgeEvent je : judgeList) {
-            if (je.type != 1) continue;
-            Note selNote = checkNoteSelections.get(je.touchId);
-            if (selNote != null) {
-                noteToJudgeEvent.put(selNote, je);
             }
         }
 
@@ -5324,26 +5459,6 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
 
             // Per-frame: reset PreJudge, recalculate based on current frame's touches
             note.preJudge = false;
-
-            // Drag preventBad (style Drag protection):
-            // When a Drag hasn't reached the judgment line yet (deltaTime > 0),
-            // mark nearby type-1 (click) judge events as preventBad.
-            // This prevents those taps from causing Bad judgments on Tap notes,
-            // because Drag only has Perfect/Miss — the tap is "absorbed" by the Drag.
-            // Challenge mode: preventBad time window and spatial threshold halved.
-            if (deltaTime > 0) {
-                float preventBadSpatial = challengeMode ? 1.05f : 2.1f;
-                double preventBadTimeLimit = challengeMode ? limitBad * 0.5 : limitBad;
-                if (deltaTime < preventBadTimeLimit) {
-                    for (JudgeEvent je : judgeList) {
-                        if (je.type != 1) continue;
-                        float touchPos = getPhigrosTouchPos(je.offsetX, je.offsetY, note, tChart, stageAspect);
-                        if (touchPos < preventBadSpatial) {
-                            je.preventBad = true;
-                        }
-                    }
-                }
-            }
 
             // Drag isJudged: any continuous touch (type 2) within Phigros range (touchPos < 2.1)
             // Phigros: DragControl matching only within |delta| <= 0.1
@@ -5401,25 +5516,6 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
             }
             // Too far in future, skip
             if (deltaTime > flickMissLimit) continue;
-
-            // Flick preventBad (style Flick protection):
-            // When a Flick hasn't reached the judgment line (deltaTime > 0) or
-            // hasn't been pre-judged yet (!preJudge), mark nearby type-1 (click)
-            // judge events as preventBad to prevent Bad on Tap notes.
-            // Challenge mode: preventBad time window and spatial threshold halved.
-            if (deltaTime > 0 || !note.preJudge) {
-                float preventBadSpatial = challengeMode ? 1.05f : 2.1f;
-                double preventBadTimeLimit = challengeMode ? limitBad * 0.5 : limitBad;
-                if (!challengeMode || deltaTime < preventBadTimeLimit) {
-                    for (JudgeEvent je : judgeList) {
-                        if (je.type != 1) continue;
-                        float touchPos = getPhigrosTouchPos(je.offsetX, je.offsetY, note, tChart, stageAspect);
-                        if (touchPos < preventBadSpatial) {
-                            je.preventBad = true;
-                        }
-                    }
-                }
-            }
 
             // Flick PreJudge: type 3 (active flick gesture) within Phigros range (touchPos < 2.1)
             if (!note.preJudge) {
@@ -5642,7 +5738,8 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
                         note.holdTapTimeMs = System.nanoTime() / 1_000_000L;
                         note.holdBroken = false;
                         if (holdHeadSpawned.add(note)) {
-                            spawnHoldHeadHitEffect(note, tChart, skinGColor[0], skinGColor[1], skinGColor[2], skinGAlpha, 3);
+                            spawnHoldHeadHitEffect(note, tChart, skinGColor[0], skinGColor[1], skinGColor[2], skinGAlpha, 3,
+                                    deltaTime > 0.0);
                         }
                         // Record HOLD_PRESS immediately so short holds aren't missed
                         if (replayRecording && replayRecorderData != null) {
@@ -5660,21 +5757,12 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
                     }
                     note.statOffset = deltaTime;
                 } else if (note.type != GameConstants.NOTE_HOLD && absDt <= limitBad) {
-                    // Bad — Tap only; Hold has no Bad judgment (no hit SFX on Bad)
-                    // Drag/Flick preventBad: if the tap that selected this note was
-                    // "absorbed" by an approaching Drag/Flick, skip Bad and revoke
-                    // isJudged so the note waits for a better touch.
-                    JudgeEvent selectingEvent = noteToJudgeEvent.get(note);
-                    if (selectingEvent != null && selectingEvent.preventBad && deltaTime > 0) {
-                        // Early tap absorbed by nearby Drag/Flick — revoke selection
-                        note.isJudged = false;
-                    } else {
-                        commitJudgement(note, JR_BAD, deltaTime);
-                        note.badTimeMs = System.nanoTime() / 1_000_000L;
-                        note.statOffset = deltaTime;
-                    }
+                    // Bad - Tap only; Hold has no Bad judgment.
+                    commitJudgement(note, JR_BAD, deltaTime);
+                    note.badTimeMs = System.nanoTime() / 1_000_000L;
+                    note.statOffset = deltaTime;
                 } else if (note.type == GameConstants.NOTE_HOLD) {
-                    // Hold: |delta| >= goodTimeRange → revoke activation, wait for a better touch
+                    // Hold has no Bad judgment; revoke activation and wait.
                     note.isJudged = false;
                 } else if (note.type == GameConstants.NOTE_TAP) {
                     // Tap: |delta| > badTimeRange (shouldn't happen via CheckNote, but safety net)
@@ -5963,17 +6051,20 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
     }
 
     /**
-     * Hold head hit effect: places effect at head's current visual position (above or on the judge line).
+     * Hold head hit effect follows official behavior: early Good appears at the
+     * current Hold head position; Perfect, late Good, and on-time Good use the judge line.
      */
     private void spawnHoldHeadHitEffect(@NonNull Note note, double timeSec, float r, float g, float b, float a, int numOfParts) {
+        spawnHoldHeadHitEffect(note, timeSec, r, g, b, a, numOfParts, false);
+    }
+
+    private void spawnHoldHeadHitEffect(@NonNull Note note, double timeSec, float r, float g, float b, float a, int numOfParts, boolean earlyGood) {
         if (texHitFx == null || texWhite == null) return;
 
-        if (note.sect > timeSec) {
-            // Head hasn't reached the line yet — spawn at head's current visual position
+        if (earlyGood && note.sect > timeSec) {
             if (!computeNoteHeadPosition(note, timeSec, tmpNotePos)) return;
             getLineRotDeg(note, timeSec, lineRotOut);
         } else {
-            // Head has already passed the line — spawn on the judge line
             if (!computeNoteHeadPositionOnLine(note, timeSec, tmpNotePos, lineRotOut)) return;
         }
 
@@ -7107,6 +7198,7 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
         int width;
         int height;
         int paddingBottom; // Extra padding at bottom (e.g. for shadow/tails)
+        boolean legacyCharacterAdvance;
 
         // --- GC-survivable fields (style: keep pixel data alive on Java heap) ---
         /** Retained bitmap for re-upload after GL context loss. Null if not retained. */

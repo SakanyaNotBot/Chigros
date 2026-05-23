@@ -130,7 +130,7 @@
                     android:alpha="0.5"
                     android:includeFontPadding="false"
                     android:fontFamily="sans-serif"
-                    android:text="ACCURACY"
+                    android:text="@string/result_accuracy"
                     android:textAllCaps="true"
                     android:textColor="#FFFFFF"
                     android:textSize="12sp" />
@@ -161,7 +161,7 @@
                     android:alpha="0.5"
                     android:includeFontPadding="false"
                     android:fontFamily="sans-serif"
-                    android:text="MAX COMBO"
+                    android:text="@string/result_max_combo"
                     android:textAllCaps="true"
                     android:textColor="#FFFFFF"
                     android:textSize="12sp" />
@@ -192,7 +192,7 @@
                     android:alpha="0.5"
                     android:includeFontPadding="false"
                     android:fontFamily="sans-serif"
-                    android:text="STD DEVIATION"
+                    android:text="@string/result_std_deviation"
                     android:textAllCaps="true"
                     android:textColor="#FFFFFF"
                     android:textSize="12sp" />
@@ -338,7 +338,7 @@
                     android:alpha="0.5"
                     android:includeFontPadding="false"
                     android:fontFamily="sans-serif"
-                    android:text="PERFECT"
+                    android:text="@string/result_perfect"
                     android:textAllCaps="true"
                     android:textColor="#FFFFFF"
                     android:textSize="11sp" />
@@ -369,7 +369,7 @@
                     android:alpha="0.5"
                     android:includeFontPadding="false"
                     android:fontFamily="sans-serif"
-                    android:text="GOOD"
+                    android:text="@string/result_good"
                     android:textAllCaps="true"
                     android:textColor="#FFFFFF"
                     android:textSize="11sp" />
@@ -400,7 +400,7 @@
                     android:alpha="0.5"
                     android:includeFontPadding="false"
                     android:fontFamily="sans-serif"
-                    android:text="BAD"
+                    android:text="@string/result_bad"
                     android:textAllCaps="true"
                     android:textColor="#FFFFFF"
                     android:textSize="11sp" />
@@ -431,7 +431,7 @@
                     android:alpha="0.5"
                     android:includeFontPadding="false"
                     android:fontFamily="sans-serif"
-                    android:text="MISS"
+                    android:text="@string/result_miss"
                     android:textAllCaps="true"
                     android:textColor="#FFFFFF"
                     android:textSize="11sp" />
@@ -481,7 +481,7 @@
                         android:alpha="0.5"
                         android:includeFontPadding="false"
                         android:fontFamily="sans-serif"
-                        android:text="EARLY"
+                        android:text="@string/result_early"
                         android:textAllCaps="true"
                         android:textColor="#FFFFFF"
                         android:textSize="11sp" />
@@ -513,7 +513,7 @@
                         android:alpha="0.5"
                         android:includeFontPadding="false"
                         android:fontFamily="sans-serif"
-                        android:text="LATE"
+                        android:text="@string/result_late"
                         android:textAllCaps="true"
                         android:textColor="#FFFFFF"
                         android:textSize="11sp" />

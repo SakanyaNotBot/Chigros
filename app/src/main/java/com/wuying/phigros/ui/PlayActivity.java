@@ -44,6 +44,27 @@ import java.util.concurrent.Executors;
 
 public class PlayActivity extends AppCompatActivity implements GameRenderer.Callback {
 
+    private static final String HUD_FONT_ASSET = "res/phigros.ttf";
+    private static final float OFFICIAL_HUD_MAX_ASPECT = 16f / 9f;
+    private static final float OFFICIAL_HUD_HALF_HEIGHT = 500f;
+    private static final float OFFICIAL_HUD_SCORE_X_OFFSET = -237.3887939f;
+    private static final float OFFICIAL_HUD_SCORE_Y = 445.7000122f;
+    private static final float OFFICIAL_HUD_SCORE_W = 400f;
+    private static final float OFFICIAL_HUD_COMBO_Y = 452f;
+    private static final float OFFICIAL_HUD_COMBO_TEXT_Y = 405f;
+    private static final float OFFICIAL_HUD_SONG_X_OFFSET = 40f;
+    private static final float OFFICIAL_HUD_SONG_Y = -473.2000122f;
+    private static final float OFFICIAL_HUD_SONG_W = 650f;
+    private static final float OFFICIAL_HUD_LEVEL_X_OFFSET = -40f;
+    private static final float OFFICIAL_HUD_LEVEL_Y = -473.2000122f;
+    private static final float OFFICIAL_HUD_LEVEL_W = 650f;
+    private static final float OFFICIAL_HUD_BOTTOM_TEXT_Y_FIX_AT_1080PX = 5f;
+    private static final float OFFICIAL_HUD_BOTTOM_TEXT_SIZE = 36f;
+    private static final float OFFICIAL_HUD_SCORE_TEXT_SIZE = 50f;
+    private static final float OFFICIAL_HUD_COMBO_NUMBER_TEXT_SIZE = 70f;
+    private static final float OFFICIAL_HUD_COMBO_LABEL_TEXT_SIZE = 24f;
+    private static final String HUD_LEGACY_TEXT_FONT_FEATURES = "'kern' 0, 'liga' 0, 'clig' 0";
+
     public static final String EXTRA_MUSIC_PATH = "extra_music_path";
     public static final String EXTRA_CHART_PATH = "extra_chart_path";
     public static final String EXTRA_BG_PATH = "extra_bg_path";
@@ -173,11 +194,7 @@ public class PlayActivity extends AppCompatActivity implements GameRenderer.Call
         if (!Float.isFinite(backgroundDim)) backgroundDim = 0.6f;
         backgroundDim = Math.max(0.0f, Math.min(backgroundDim, 1.0f));
 
-        try {
-            gameTypeface = Typeface.createFromAsset(getAssets(), "res/phigros.ttf");
-        } catch (Throwable ignored) {
-            gameTypeface = null;
-        }
+        gameTypeface = Typeface.createFromAsset(getAssets(), HUD_FONT_ASSET);
 
         getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
             @Override
@@ -244,7 +261,7 @@ public class PlayActivity extends AppCompatActivity implements GameRenderer.Call
                 FrameLayout.LayoutParams.WRAP_CONTENT);
         tvLp.topMargin = (int) (18 * d);
         loadingText.setLayoutParams(tvLp);
-        loadingText.setText("加载中...\n(正在解析谱面与解码音频)");
+        loadingText.setText(R.string.loading_play);
         loadingText.setTextColor(0xFFF3F7FB);
         loadingText.setTextSize(15);
         loadingText.setGravity(Gravity.CENTER);
@@ -264,14 +281,14 @@ public class PlayActivity extends AppCompatActivity implements GameRenderer.Call
                 try {
                     return PcmDecoder.decodeFileToFloatPcm(musicPath);
                 } catch (OutOfMemoryError oom) {
-                    throw new IOException("音频文件过大，内存不足无法解码，请尝试更小的音频文件", oom);
+                    throw new IOException(getString(R.string.error_audio_too_large), oom);
                 }
             });
             java.util.concurrent.Future<Chart> chartFuture = parallel.submit(() -> {
                 try {
                     return ChartLoader.loadFromFile(chartPath);
                 } catch (OutOfMemoryError oom) {
-                    throw new IOException("谱面文件过大，内存不足无法解析", oom);
+                    throw new IOException(getString(R.string.error_chart_too_large), oom);
                 }
             });
             parallel.shutdown();
@@ -318,7 +335,7 @@ public class PlayActivity extends AppCompatActivity implements GameRenderer.Call
                     renderer.setReplayPlayback(replayData);
                 } catch (IOException e) {
                     runOnUiThread(() -> {
-                        Toast.makeText(this, "加载回放失败：" + e.getMessage(), Toast.LENGTH_SHORT).show();
+                        Toast.makeText(this, getString(R.string.toast_replay_load_failed, e.getMessage()), Toast.LENGTH_SHORT).show();
                         finish();
                     });
                     return;
@@ -367,8 +384,8 @@ public class PlayActivity extends AppCompatActivity implements GameRenderer.Call
             } catch (Throwable ignored) {
             }
             final String msg = (e instanceof OutOfMemoryError)
-                    ? "内存不足，无法加载该谱面（文件过大）"
-                    : "加载失败：" + e.getMessage();
+                    ? getString(R.string.toast_load_oom)
+                    : getString(R.string.toast_load_failed, e.getMessage());
             runOnUiThread(() -> {
                 Toast.makeText(this, msg, Toast.LENGTH_LONG).show();
                 finish();
@@ -434,23 +451,24 @@ public class PlayActivity extends AppCompatActivity implements GameRenderer.Call
         tvSongTitle = new TextView(this);
         tvSongTitle.setText(songName == null ? "" : songName);
         tvSongTitle.setTextColor(Color.WHITE);
-        tvSongTitle.setShadowLayer(6f, 0f, 0f, 0x66000000);
         tvSongTitle.setSingleLine(true);
         tvSongTitle.setIncludeFontPadding(false);
-        tvSongTitle.setPadding(0, 8, 0, 4);
+        tvSongTitle.setPadding(0, 0, 0, 0);
+        tvSongTitle.setLetterSpacing(0f);
+        tvSongTitle.setFontFeatureSettings(HUD_LEGACY_TEXT_FONT_FEATURES);
 
         tvDifficulty = new TextView(this);
         tvDifficulty.setText(difficulty == null ? "" : difficulty);
         tvDifficulty.setTextColor(Color.WHITE);
-        tvDifficulty.setShadowLayer(6f, 0f, 0f, 0x66000000);
         tvDifficulty.setSingleLine(true);
         tvDifficulty.setIncludeFontPadding(false);
-        tvDifficulty.setPadding(0, 8, 0, 4);
+        tvDifficulty.setPadding(0, 0, 0, 0);
+        tvDifficulty.setLetterSpacing(0f);
+        tvDifficulty.setFontFeatureSettings(HUD_LEGACY_TEXT_FONT_FEATURES);
 
         tvScore = new TextView(this);
         tvScore.setText("0000000");
         tvScore.setTextColor(Color.WHITE);
-        tvScore.setShadowLayer(6f, 0f, 0f, 0x66000000);
         tvScore.setSingleLine(true);
         tvScore.setIncludeFontPadding(false);
 
@@ -460,7 +478,6 @@ public class PlayActivity extends AppCompatActivity implements GameRenderer.Call
 
         tvComboNum = new TextView(this);
         tvComboNum.setTextColor(Color.WHITE);
-        tvComboNum.setShadowLayer(6f, 0f, 0f, 0x66000000);
         tvComboNum.setText("0");
         tvComboNum.setGravity(Gravity.CENTER_HORIZONTAL);
         tvComboNum.setTextAlignment(View.TEXT_ALIGNMENT_CENTER);
@@ -468,8 +485,7 @@ public class PlayActivity extends AppCompatActivity implements GameRenderer.Call
 
         tvComboLabel = new TextView(this);
         tvComboLabel.setTextColor(Color.WHITE);
-        tvComboLabel.setShadowLayer(6f, 0f, 0f, 0x66000000);
-        tvComboLabel.setText(replayMode ? "REPLAY" : (autoplay ? "AUTOPLAY" : "COMBO"));
+        tvComboLabel.setText(replayMode ? R.string.combo_replay : (autoplay ? R.string.combo_autoplay : R.string.combo_combo));
         tvComboLabel.setGravity(Gravity.CENTER_HORIZONTAL);
         tvComboLabel.setTextAlignment(View.TEXT_ALIGNMENT_CENTER);
         tvComboLabel.setIncludeFontPadding(false);
@@ -544,53 +560,78 @@ public class PlayActivity extends AppCompatActivity implements GameRenderer.Call
         if (sw <= 0) sw = getResources().getDisplayMetrics().widthPixels;
         if (sh <= 0) sh = getResources().getDisplayMetrics().heightPixels;
 
-        float lineScale = stageW > stageH * 0.75f ? (stageH / 18.75f) : (stageW / 14.0625f);
-
-        float bottomTextPx = clamp((stageW + stageH) / 86.25f, dp(11), dp(26));
-        float scorePx = clamp((stageW + stageH) / 56.25f, dp(13), dp(33));
-        float comboNumPx = clamp(lineScale * 1.3f, dp(22), dp(62));
-        float comboLabelPx = clamp(lineScale * 0.4f, dp(8), dp(21));
-        float difficultyPx = clamp((stageW + stageH) / 86.25f, dp(12), dp(27));
+        float hudUnitPx = officialHudUnitPx();
+        float halfUiW = officialHudHalfUiW();
+        float bottomTextPx = officialHudSize(OFFICIAL_HUD_BOTTOM_TEXT_SIZE);
+        float scorePx = officialHudSize(OFFICIAL_HUD_SCORE_TEXT_SIZE);
+        float comboNumPx = officialHudSize(OFFICIAL_HUD_COMBO_NUMBER_TEXT_SIZE);
+        float comboLabelPx = officialHudSize(OFFICIAL_HUD_COMBO_LABEL_TEXT_SIZE);
+        float difficultyPx = bottomTextPx;
 
         if (tvSongTitle != null) {
             tvSongTitle.setTextSize(TypedValue.COMPLEX_UNIT_PX, bottomTextPx);
             FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) tvSongTitle.getLayoutParams();
             lp.gravity = Gravity.BOTTOM | Gravity.START;
-            lp.leftMargin = (int) (stageL + stageW * 0.0225f);
-            lp.bottomMargin = (int) (sh - (stageT + stageH * 0.965f));
+            lp.leftMargin = Math.round(officialHudX(OFFICIAL_HUD_SONG_X_OFFSET - halfUiW));
+            lp.bottomMargin = Math.round(sh - officialHudY(OFFICIAL_HUD_SONG_Y) + officialHudBottomTextYOffsetPx());
             tvSongTitle.setLayoutParams(lp);
-            tvSongTitle.setMaxWidth((int) (stageW * 0.50f));
+            tvSongTitle.setMaxWidth(Math.round(officialHudSize(OFFICIAL_HUD_SONG_W)));
         }
         if (tvDifficulty != null) {
             tvDifficulty.setTextSize(TypedValue.COMPLEX_UNIT_PX, difficultyPx);
             FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) tvDifficulty.getLayoutParams();
             lp.gravity = Gravity.BOTTOM | Gravity.END;
-            lp.rightMargin = (int) (sw - (stageL + stageW * 0.9775f));
-            lp.bottomMargin = (int) (sh - (stageT + stageH * 0.965f));
+            lp.rightMargin = Math.round(sw - officialHudX(halfUiW + OFFICIAL_HUD_LEVEL_X_OFFSET));
+            lp.bottomMargin = Math.round(sh - officialHudY(OFFICIAL_HUD_LEVEL_Y) + officialHudBottomTextYOffsetPx());
             tvDifficulty.setLayoutParams(lp);
-            tvDifficulty.setMaxWidth((int) (stageW * 0.35f));
+            tvDifficulty.setMaxWidth(Math.round(officialHudSize(OFFICIAL_HUD_LEVEL_W)));
         }
         if (tvScore != null) {
             tvScore.setTextSize(TypedValue.COMPLEX_UNIT_PX, scorePx);
             FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) tvScore.getLayoutParams();
             lp.gravity = Gravity.TOP | Gravity.END;
-            lp.rightMargin = (int) (sw - (stageL + stageW * (1.0f - 40.0f / 1920.0f)));
-            lp.topMargin = (int) (stageT + stageH * 31.0f / 1080.0f);
+            float scoreRectCx = officialHudX(halfUiW + OFFICIAL_HUD_SCORE_X_OFFSET);
+            float scoreRight = scoreRectCx + OFFICIAL_HUD_SCORE_W * hudUnitPx * 0.5f;
+            lp.rightMargin = Math.round(sw - scoreRight);
+            lp.topMargin = Math.round(officialHudY(OFFICIAL_HUD_SCORE_Y) - officialHudSize(100f) * 0.5f);
             tvScore.setLayoutParams(lp);
         }
         if (comboLayout != null) {
-            float spacing = Math.max(0f, lineScale * 0.065f);
             if (tvComboNum != null) tvComboNum.setTextSize(TypedValue.COMPLEX_UNIT_PX, comboNumPx);
             if (tvComboLabel != null) tvComboLabel.setTextSize(TypedValue.COMPLEX_UNIT_PX, comboLabelPx);
             FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) comboLayout.getLayoutParams();
             lp.gravity = Gravity.TOP | Gravity.CENTER_HORIZONTAL;
-            lp.topMargin = (int) (stageT + spacing);
+            lp.leftMargin = 0;
+            lp.rightMargin = 0;
+            lp.topMargin = Math.round(officialHudY(OFFICIAL_HUD_COMBO_Y) - comboNumPx * 0.5f);
             comboLayout.setLayoutParams(lp);
         }
     }
 
-    private float dp(float dp) { return dp * getResources().getDisplayMetrics().density; }
-    private static float clamp(float v, float lo, float hi) { return v < lo ? lo : (v > hi ? hi : v); }
+    private float officialHudUnitPx() {
+        return stageH > 0f ? stageH / 1000f : 1f;
+    }
+
+    private float officialHudHalfUiW() {
+        float aspect = (stageH > 1e-6f) ? (stageW / stageH) : OFFICIAL_HUD_MAX_ASPECT;
+        return Math.min(aspect, OFFICIAL_HUD_MAX_ASPECT) * OFFICIAL_HUD_HALF_HEIGHT;
+    }
+
+    private float officialHudX(float uiX) {
+        return stageL + stageW * 0.5f + uiX * officialHudUnitPx();
+    }
+
+    private float officialHudY(float uiY) {
+        return stageT + stageH * 0.5f - uiY * officialHudUnitPx();
+    }
+
+    private float officialHudSize(float uiSize) {
+        return uiSize * officialHudUnitPx();
+    }
+
+    private float officialHudBottomTextYOffsetPx() {
+        return OFFICIAL_HUD_BOTTOM_TEXT_Y_FIX_AT_1080PX * stageH / 1080f;
+    }
 
     @SuppressLint("GestureBackNavigation")
     @Override

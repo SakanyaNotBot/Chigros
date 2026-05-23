@@ -110,21 +110,23 @@ public class SelectChartFragment extends Fragment {
         File music = a.getMusicFile();
         File chart = a.getChartFile();
         File bg = a.getBgFile();
+        String notSelected = getString(R.string.state_not_selected);
 
         if (tvPackStatus != null) {
-            String s = "未选择";
+            String s = notSelected;
             if (music != null || chart != null || bg != null) {
-                s = "已载入："
-                        + (music != null ? " 音乐" : "")
-                        + (chart != null ? " 谱面" : "")
-                        + (bg != null ? " 背景" : "");
+                StringBuilder loaded = new StringBuilder();
+                if (music != null) appendLoadedItem(loaded, R.string.pack_item_music);
+                if (chart != null) appendLoadedItem(loaded, R.string.pack_item_chart);
+                if (bg != null) appendLoadedItem(loaded, R.string.pack_item_background);
+                s = getString(R.string.pack_loaded, loaded.toString());
             }
             tvPackStatus.setText(s);
         }
 
-        if (tvMusic != null) tvMusic.setText("音乐：" + (music == null ? "未选择" : music.getName()));
-        if (tvChart != null) tvChart.setText("谱面：" + (chart == null ? "未选择" : chart.getName()));
-        if (tvBg != null) tvBg.setText("背景：" + (bg == null ? "未选择" : bg.getName()));
+        if (tvMusic != null) tvMusic.setText(getString(R.string.status_music, music == null ? notSelected : music.getName()));
+        if (tvChart != null) tvChart.setText(getString(R.string.status_chart, chart == null ? notSelected : chart.getName()));
+        if (tvBg != null) tvBg.setText(getString(R.string.status_background, bg == null ? notSelected : bg.getName()));
 
         boolean enableInfo = (chart != null && chart.exists());
         if (tilSongName != null) tilSongName.setEnabled(enableInfo);
@@ -152,6 +154,11 @@ public class SelectChartFragment extends Fragment {
 
     private ChartSelectActivity host() {
         return (ChartSelectActivity) requireActivity();
+    }
+
+    private void appendLoadedItem(StringBuilder builder, int resId) {
+        if (builder.length() > 0) builder.append(' ');
+        builder.append(getString(resId));
     }
 
     private abstract static class SimpleWatcher implements TextWatcher {

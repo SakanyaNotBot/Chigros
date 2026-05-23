@@ -3,6 +3,7 @@ package com.wuying.phigros.ui;
 import android.content.Context;
 import android.content.SharedPreferences;
 
+import com.wuying.phigros.R;
 import com.wuying.phigros.game.SkinConfig;
 
 import java.io.File;
@@ -60,7 +61,7 @@ public final class SkinManager {
 
     public static List<SkinEntry> getSkinList(Context context) {
         List<SkinEntry> list = new ArrayList<>();
-        list.add(new SkinEntry("builtin", "内置皮肤"));
+        list.add(new SkinEntry("builtin", context.getString(R.string.skin_builtin)));
 
         SharedPreferences prefs = getPrefs(context);
         String idsStr = prefs.getString(PREF_SKIN_IDS, "");
@@ -90,7 +91,7 @@ public final class SkinManager {
         String uuid = UUID.randomUUID().toString().replace("-", "");
         File skinDir = new File(getSkinsRoot(context), uuid);
         if (!skinDir.mkdirs()) {
-            throw new IOException("无法创建皮肤目录");
+            throw new IOException(context.getString(R.string.error_create_skin_dir));
         }
 
         try (FileInputStream fis = new FileInputStream(zipFile);

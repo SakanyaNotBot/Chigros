@@ -125,13 +125,13 @@ public class ChartSelectActivity extends AppCompatActivity {
             try {
                 File zipFile = FileUtils.copyUriToCache(this, uri, "cgrp_import");
                 ReplayManager.importReplayFromCgrp(this, zipFile);
-                toast("回放导入成功");
+                toast(getString(R.string.toast_replay_import_success));
                 notifyReplayTabChanged();
                 // Switch to replay tab
                 ViewPager2 pager = findViewById(R.id.view_pager);
                 if (pager != null) pager.setCurrentItem(3, true);
             } catch (IOException e) {
-                toast("导入回放失败：" + e.getMessage());
+                toast(getString(R.string.toast_replay_import_failed, e.getMessage()));
             }
         }
     }
@@ -180,10 +180,10 @@ public class ChartSelectActivity extends AppCompatActivity {
         SelectPagerAdapter adapter = new SelectPagerAdapter(this);
         pager.setAdapter(adapter);
         new TabLayoutMediator(tabLayout, pager, (tab, position) -> {
-            if (position == 0) tab.setText("谱面");
-            else if (position == 1) tab.setText("视频");
-            else if (position == 2) tab.setText("音频");
-            else tab.setText("回放");
+            if (position == 0) tab.setText(R.string.tab_chart);
+            else if (position == 1) tab.setText(R.string.tab_video);
+            else if (position == 2) tab.setText(R.string.tab_audio);
+            else tab.setText(R.string.tab_replay);
         }).attach();
         pager.registerOnPageChangeCallback(new ViewPager2.OnPageChangeCallback() {
             @Override
@@ -200,11 +200,11 @@ public class ChartSelectActivity extends AppCompatActivity {
             updateStartButtonText();
             fabStart.setOnClickListener(v -> {
                 if (!isReadyToStart()) {
-                    toast("请先选择音乐、谱面与背景");
+                    toast(getString(R.string.toast_pick_required_files));
                     return;
                 }
                 if (TextUtils.isEmpty(songName) || TextUtils.isEmpty(difficulty)) {
-                    toast("请在“谱面”选项卡填写曲名与难度");
+                    toast(getString(R.string.toast_fill_song_info));
                     return;
                 }
                 startPlay();
@@ -214,10 +214,10 @@ public class ChartSelectActivity extends AppCompatActivity {
 
     private void updateToolbarTitle(int position) {
         if (toolbar == null) return;
-        if (position == 0) toolbar.setTitle("谱面设置");
-        else if (position == 1) toolbar.setTitle("视频设置");
-        else if (position == 2) toolbar.setTitle("音频设置");
-        else toolbar.setTitle("回放设置");
+        if (position == 0) toolbar.setTitle(R.string.title_chart_settings);
+        else if (position == 1) toolbar.setTitle(R.string.title_video_settings);
+        else if (position == 2) toolbar.setTitle(R.string.title_audio_settings);
+        else toolbar.setTitle(R.string.title_replay_settings);
     }
 
     private void initLaunchers() {
@@ -232,7 +232,7 @@ public class ChartSelectActivity extends AppCompatActivity {
                 }
             } catch (IOException e) {
                 musicFile = null;
-                toast("复制音乐文件失败：" + e.getMessage());
+                toast(getString(R.string.toast_copy_music_failed, e.getMessage()));
             }
             notifyChartTabFilesChanged();
         });
@@ -245,7 +245,7 @@ public class ChartSelectActivity extends AppCompatActivity {
                 chartFile = FileUtils.copyUriToCache(this, uri, "chart");
             } catch (IOException e) {
                 chartFile = null;
-                toast("复制谱面文件失败：" + e.getMessage());
+                toast(getString(R.string.toast_copy_chart_failed, e.getMessage()));
             }
             tryUpdateSongInfo();
             notifyChartTabFilesChanged();
@@ -258,7 +258,7 @@ public class ChartSelectActivity extends AppCompatActivity {
                 bgFile = FileUtils.copyUriToCache(this, uri, "bg");
             } catch (IOException e) {
                 bgFile = null;
-                toast("复制背景图片失败：" + e.getMessage());
+                toast(getString(R.string.toast_copy_background_failed, e.getMessage()));
             }
             notifyChartTabFilesChanged();
         });
@@ -292,11 +292,11 @@ public class ChartSelectActivity extends AppCompatActivity {
                     }
                 }
 
-                toast("压缩包解析完成");
+                toast(getString(R.string.toast_pack_parse_success));
             } catch (OutOfMemoryError oom) {
-                toast("压缩包过大，内存不足无法加载");
+                toast(getString(R.string.toast_pack_too_large));
             } catch (IOException e) {
-                toast("处理压缩包失败：" + e.getMessage());
+                toast(getString(R.string.toast_pack_failed, e.getMessage()));
             }
             tryUpdateSongInfo();
             notifyChartTabFilesChanged();
@@ -308,10 +308,10 @@ public class ChartSelectActivity extends AppCompatActivity {
             try {
                 File zipFile = FileUtils.copyUriToCache(this, uri, "skin_zip");
                 SkinManager.importSkin(this, zipFile);
-                toast("皮肤导入成功");
+                toast(getString(R.string.toast_skin_import_success));
                 notifyVideoTabSkinChanged();
             } catch (IOException e) {
-                toast("导入皮肤失败：" + e.getMessage());
+                toast(getString(R.string.toast_skin_import_failed, e.getMessage()));
             }
         });
 
@@ -321,10 +321,10 @@ public class ChartSelectActivity extends AppCompatActivity {
             try {
                 File zipFile = FileUtils.copyUriToCache(this, uri, "replay_zip");
                 ReplayManager.importReplayFromCgrp(this, zipFile);
-                toast("回放导入成功");
+                toast(getString(R.string.toast_replay_import_success));
                 notifyReplayTabChanged();
             } catch (IOException e) {
-                toast("导入回放失败：" + e.getMessage());
+                toast(getString(R.string.toast_replay_import_failed, e.getMessage()));
             }
         });
     }
@@ -395,7 +395,7 @@ public class ChartSelectActivity extends AppCompatActivity {
 
     private void updateStartButtonText() {
         if (fabStart == null) return;
-        fabStart.setText(autoplay ? "开始演示" : "开始");
+        fabStart.setText(autoplay ? R.string.action_start_autoplay : R.string.action_start);
     }
 
     private void startPlay() {

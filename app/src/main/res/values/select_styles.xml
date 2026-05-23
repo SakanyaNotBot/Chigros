@@ -1,0 +1,96 @@
+<resources>
+    <style name="SelectPageRoot">
+        <item name="android:background">@drawable/select_screen_bg</item>
+        <item name="android:clipToPadding">false</item>
+        <item name="android:paddingBottom">104dp</item>
+    </style>
+
+    <style name="SelectPageContent">
+        <item name="android:paddingStart">18dp</item>
+        <item name="android:paddingTop">18dp</item>
+        <item name="android:paddingEnd">18dp</item>
+        <item name="android:paddingBottom">18dp</item>
+    </style>
+
+    <style name="SelectCard" parent="Widget.MaterialComponents.CardView">
+        <item name="cardBackgroundColor">@color/select_surface</item>
+        <item name="cardCornerRadius">8dp</item>
+        <item name="cardElevation">0dp</item>
+        <item name="strokeColor">@color/select_outline</item>
+        <item name="strokeWidth">1dp</item>
+        <item name="cardUseCompatPadding">false</item>
+        <item name="android:layout_marginBottom">14dp</item>
+    </style>
+
+    <style name="SelectSectionTitle">
+        <item name="android:textColor">@color/select_text_primary</item>
+        <item name="android:textSize">15sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:letterSpacing">0</item>
+    </style>
+
+    <style name="SelectBodyText">
+        <item name="android:textColor">@color/select_text_secondary</item>
+        <item name="android:textSize">13sp</item>
+        <item name="android:lineSpacingExtra">2dp</item>
+        <item name="android:letterSpacing">0</item>
+    </style>
+
+    <style name="SelectStatusText" parent="SelectBodyText">
+        <item name="android:background">@drawable/select_status_bg</item>
+        <item name="android:paddingStart">12dp</item>
+        <item name="android:paddingTop">9dp</item>
+        <item name="android:paddingEnd">12dp</item>
+        <item name="android:paddingBottom">9dp</item>
+    </style>
+
+    <style name="SelectButton" parent="Widget.MaterialComponents.Button">
+        <item name="backgroundTint">@color/select_button_tint</item>
+        <item name="cornerRadius">8dp</item>
+        <item name="strokeColor">@color/select_outline_strong</item>
+        <item name="strokeWidth">1dp</item>
+        <item name="android:textColor">@color/select_button_text</item>
+        <item name="android:textAllCaps">false</item>
+        <item name="android:minHeight">48dp</item>
+        <item name="iconTint">@color/select_button_text</item>
+        <item name="rippleColor">@color/select_ripple</item>
+    </style>
+
+    <style name="SelectTextButton" parent="Widget.MaterialComponents.Button.TextButton">
+        <item name="backgroundTint">@color/select_chip</item>
+        <item name="cornerRadius">8dp</item>
+        <item name="android:textColor">@color/select_text_primary</item>
+        <item name="android:textAllCaps">false</item>
+        <item name="iconTint">@color/select_text_primary</item>
+        <item name="rippleColor">@color/select_ripple</item>
+    </style>
+
+    <style name="SelectInput" parent="Widget.MaterialComponents.TextInputLayout.OutlinedBox">
+        <item name="boxBackgroundColor">@color/select_surface_high</item>
+        <item name="boxStrokeColor">@color/select_outline_strong</item>
+        <item name="hintTextColor">@color/select_text_secondary</item>
+        <item name="android:textColorHint">@color/select_text_secondary</item>
+        <item name="boxCornerRadiusTopStart">8dp</item>
+        <item name="boxCornerRadiusTopEnd">8dp</item>
+        <item name="boxCornerRadiusBottomStart">8dp</item>
+        <item name="boxCornerRadiusBottomEnd">8dp</item>
+    </style>
+
+    <style name="SelectDropdown" parent="Widget.MaterialComponents.TextInputLayout.OutlinedBox.ExposedDropdownMenu">
+        <item name="boxBackgroundColor">@color/select_surface_high</item>
+        <item name="boxStrokeColor">@color/select_outline_strong</item>
+        <item name="hintTextColor">@color/select_text_secondary</item>
+        <item name="android:textColorHint">@color/select_text_secondary</item>
+        <item name="endIconTint">@color/select_text_secondary</item>
+        <item name="boxCornerRadiusTopStart">8dp</item>
+        <item name="boxCornerRadiusTopEnd">8dp</item>
+        <item name="boxCornerRadiusBottomStart">8dp</item>
+        <item name="boxCornerRadiusBottomEnd">8dp</item>
+    </style>
+
+    <style name="SelectEditText">
+        <item name="android:textColor">@color/select_text_primary</item>
+        <item name="android:textColorHint">@color/select_text_muted</item>
+        <item name="android:textSize">14sp</item>
+    </style>
+</resources>

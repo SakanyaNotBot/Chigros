@@ -26,7 +26,7 @@
                     style="@style/SelectSectionTitle"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="皮肤" />
+                    android:text="@string/section_skin" />
 
                 <LinearLayout
                     android:layout_width="match_parent"
@@ -40,7 +40,7 @@
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
-                        android:hint="选择皮肤"
+                        android:hint="@string/hint_select_skin"
                         app:endIconMode="dropdown_menu">
 
                         <com.google.android.material.textfield.MaterialAutoCompleteTextView
@@ -57,7 +57,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="48dp"
                         android:layout_marginStart="8dp"
-                        android:text="导入"
+                        android:text="@string/action_import"
                         android:textSize="14sp"
                         app:icon="@android:drawable/ic_input_add" />
 
@@ -67,7 +67,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="48dp"
                         android:layout_marginStart="6dp"
-                        android:text="删除"
+                        android:text="@string/action_delete"
                         android:textSize="14sp"
                         app:icon="@android:drawable/ic_delete" />
                 </LinearLayout>
@@ -89,7 +89,7 @@
                     style="@style/SelectSectionTitle"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="舞台宽高比" />
+                    android:text="@string/section_aspect_ratio" />
 
                 <LinearLayout
                     android:layout_width="match_parent"
@@ -103,7 +103,7 @@
                         android:layout_height="wrap_content"
                         android:layout_marginEnd="8dp"
                         android:layout_weight="1"
-                        android:hint="比例小数">
+                        android:hint="@string/hint_aspect_decimal">
 
                         <com.google.android.material.textfield.TextInputEditText
                             android:id="@+id/et_aspect_decimal"
@@ -118,7 +118,7 @@
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
-                        android:hint="预设"
+                        android:hint="@string/hint_preset"
                         app:endIconMode="dropdown_menu">
 
                         <com.google.android.material.textfield.MaterialAutoCompleteTextView
@@ -147,7 +147,7 @@
                     style="@style/SelectSectionTitle"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="按键大小缩放" />
+                    android:text="@string/section_key_scale" />
 
                 <com.google.android.material.textfield.TextInputLayout
                     style="@style/SelectInput"
@@ -195,7 +195,7 @@
                     style="@style/SelectSectionTitle"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="谱面流速" />
+                    android:text="@string/section_scroll_speed" />
 
                 <com.google.android.material.textfield.TextInputLayout
                     style="@style/SelectInput"
@@ -244,7 +244,7 @@
                     android:id="@+id/sw_mirror_x"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="镜像演示（X 轴）"
+                    android:text="@string/setting_mirror_x"
                     android:textColor="@color/select_text_primary" />
 
                 <com.google.android.material.switchmaterial.SwitchMaterial
@@ -252,7 +252,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="8dp"
-                    android:text="自动演示"
+                    android:text="@string/setting_autoplay"
                     android:textColor="@color/select_text_primary" />
 
                 <com.google.android.material.switchmaterial.SwitchMaterial
@@ -260,7 +260,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="8dp"
-                    android:text="挑战模式"
+                    android:text="@string/setting_challenge_mode"
                     android:textColor="@color/select_text_primary" />
 
                 <TextView
@@ -268,7 +268,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="16dp"
-                    android:text="背景亮度" />
+                    android:text="@string/setting_background_brightness" />
 
                 <com.google.android.material.slider.Slider
                     android:id="@+id/slider_bg_dim"
@@ -289,7 +289,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="16dp"
-                    android:text="低分辨率模式"
+                    android:text="@string/setting_low_res_mode"
                     android:textColor="@color/select_text_primary" />
 
                 <com.google.android.material.switchmaterial.SwitchMaterial
@@ -297,7 +297,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="8dp"
-                    android:text="抗锯齿"
+                    android:text="@string/setting_antialias"
                     android:textColor="@color/select_text_primary" />
 
                 <com.google.android.material.switchmaterial.SwitchMaterial
@@ -305,7 +305,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="8dp"
-                    android:text="显示 FPS"
+                    android:text="@string/setting_show_fps"
                     android:textColor="@color/select_text_primary" />
 
                 <com.google.android.material.switchmaterial.SwitchMaterial
@@ -313,7 +313,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="8dp"
-                    android:text="显示调试信息"
+                    android:text="@string/setting_show_debug"
                     android:textColor="@color/select_text_primary" />
 
                 <com.google.android.material.switchmaterial.SwitchMaterial
@@ -321,7 +321,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="8dp"
-                    android:text="多押高亮提示"
+                    android:text="@string/setting_multi_highlight"
                     android:textColor="@color/select_text_primary" />
 
                 <com.google.android.material.switchmaterial.SwitchMaterial
@@ -329,7 +329,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="8dp"
-                    android:text="AP / FC 指示器"
+                    android:text="@string/setting_apfc_indicator"
                     android:textColor="@color/select_text_primary" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>

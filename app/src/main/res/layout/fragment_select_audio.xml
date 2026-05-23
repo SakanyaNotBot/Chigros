@@ -26,7 +26,7 @@
                     style="@style/SelectSectionTitle"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="音乐音量" />
+                    android:text="@string/section_music_volume" />
 
                 <com.google.android.material.textfield.TextInputLayout
                     style="@style/SelectInput"
@@ -75,7 +75,7 @@
                     style="@style/SelectSectionTitle"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="打击音效音量" />
+                    android:text="@string/section_sfx_volume" />
 
                 <com.google.android.material.textfield.TextInputLayout
                     style="@style/SelectInput"
@@ -124,7 +124,7 @@
                     style="@style/SelectSectionTitle"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="音乐倍速" />
+                    android:text="@string/section_music_speed" />
 
                 <com.google.android.material.textfield.TextInputLayout
                     style="@style/SelectInput"

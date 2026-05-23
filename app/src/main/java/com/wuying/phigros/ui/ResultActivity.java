@@ -40,6 +40,7 @@ public class ResultActivity extends AppCompatActivity {
     public static final String EXTRA_RESULT = "extra_result";
     public static final String EXTRA_PLAY_BUNDLE = "extra_play_bundle";
 
+    private static final String PHIGROS_FONT_ASSET = "res/phigros.ttf";
     private static final String[] GRADE_FILES = {"F.png", "C.png", "B.png", "A.png", "S.png", "V.png", "FC.png", "AP.png"};
 
     private String replayCachedPath;
@@ -247,12 +248,12 @@ public class ResultActivity extends AppCompatActivity {
         try {
             File replayJsonFile = new File(replayCachedPath);
             if (!replayJsonFile.exists()) {
-                Toast.makeText(this, "回放缓存不存在", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, R.string.toast_replay_cache_missing, Toast.LENGTH_SHORT).show();
                 return;
             }
             ReplayData replayData = ReplayManager.loadReplayJson(replayJsonFile);
             if (replayData == null) {
-                Toast.makeText(this, "回放数据损坏", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, R.string.toast_replay_data_corrupt, Toast.LENGTH_SHORT).show();
                 return;
             }
             File chartFile = null, musicFile = null, bgFile = null;
@@ -283,26 +284,20 @@ public class ResultActivity extends AppCompatActivity {
             }
             String uuid = ReplayManager.savePersistedReplay(this, replayData, chartFile, musicFile, bgFile, settings);
             if (uuid == null) {
-                Toast.makeText(this, "回放已存在，无需重复保存", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, R.string.toast_replay_already_saved, Toast.LENGTH_SHORT).show();
             } else {
-                Toast.makeText(this, "回放已保存", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, R.string.toast_replay_saved, Toast.LENGTH_SHORT).show();
             }
         } catch (IOException e) {
-            Toast.makeText(this, "保存回放失败：" + e.getMessage(), Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, getString(R.string.toast_replay_save_failed, e.getMessage()), Toast.LENGTH_SHORT).show();
         }
     }
 
     private Typeface phigrosTypeface;
 
     private void applyPhigrosFont() {
-        try {
-            phigrosTypeface = Typeface.createFromAsset(getAssets(), "res/phigros.ttf");
-        } catch (Throwable ignored) {
-            phigrosTypeface = null;
-        }
-        if (phigrosTypeface != null) {
-            applyFontRecursive(findViewById(R.id.content_container));
-        }
+        phigrosTypeface = Typeface.createFromAsset(getAssets(), PHIGROS_FONT_ASSET);
+        applyFontRecursive(findViewById(R.id.content_container));
     }
 
     private void applyFontRecursive(View view) {
