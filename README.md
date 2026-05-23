@@ -6,7 +6,6 @@ A simulator for [Phigros](https://www.taptap.cn/app/165287) by Pigeon Games.
 
 - This project is intended **only for study and research**. Commercial use or any form of illegal use is strictly prohibited.
 - All assets under `app/src/main/assets/res/` and `app/src/main/res/raw/` belong to the original game.
-- The font `phigros.ttf` is sourced from [phigrostl/PhiVideo/](https://github.com/phigrostl/PhiVideo/).
 
 ## Features
 
