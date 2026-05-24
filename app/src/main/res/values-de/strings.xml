@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Chigros</string>
+
+    <string name="tab_chart">Chart</string>
+    <string name="tab_video">Video</string>
+    <string name="tab_audio">Audio</string>
+    <string name="tab_replay">Replay</string>
+
+    <string name="title_chart_settings">Chart-Einstellungen</string>
+    <string name="title_video_settings">Videoeinstellungen</string>
+    <string name="title_audio_settings">Audioeinstellungen</string>
+    <string name="title_replay_settings">Replay-Einstellungen</string>
+
+    <string name="action_start">Starten</string>
+    <string name="action_start_autoplay">Auto starten</string>
+    <string name="action_import">Importieren</string>
+    <string name="action_export">Exportieren</string>
+    <string name="action_delete">Löschen</string>
+    <string name="action_cancel">Abbrechen</string>
+    <string name="action_export_selected">Exportieren (%1$d)</string>
+    <string name="action_delete_selected">Löschen (%1$d)</string>
+
+    <string name="state_not_selected">Nicht ausgewählt</string>
+    <string name="chart_pack">Chart-Paket</string>
+    <string name="action_pick_zip_pack">Chart-Paket wählen</string>
+    <string name="section_pick_files">Dateien einzeln wählen</string>
+    <string name="status_music">Musik: %1$s</string>
+    <string name="status_chart">Chart: %1$s</string>
+    <string name="status_background">Hintergrund: %1$s</string>
+    <string name="status_music_not_selected">Musik: nicht ausgewählt</string>
+    <string name="status_chart_not_selected">Chart: nicht ausgewählt</string>
+    <string name="status_background_not_selected">Hintergrund: nicht ausgewählt</string>
+    <string name="action_pick_music">Musik wählen</string>
+    <string name="action_pick_chart">Chart-Datei wählen</string>
+    <string name="action_pick_background">Hintergrundbild wählen</string>
+    <string name="section_chart_info">Chart-Info</string>
+    <string name="hint_song_name">Songtitel</string>
+    <string name="hint_difficulty">Schwierigkeit</string>
+    <string name="hint_chart_offset_ms">Chart-Offset (ms)</string>
+    <string name="pack_loaded">Geladen: %1$s</string>
+    <string name="pack_item_music">Musik</string>
+    <string name="pack_item_chart">Chart</string>
+    <string name="pack_item_background">Hintergrund</string>
+
+    <string name="section_skin">Skin</string>
+    <string name="hint_select_skin">Skin wählen</string>
+    <string name="section_aspect_ratio">Bühnen-Seitenverhältnis</string>
+    <string name="hint_aspect_decimal">Dezimalverhältnis</string>
+    <string name="hint_preset">Vorgabe</string>
+    <string name="section_key_scale">Notengröße</string>
+    <string name="section_scroll_speed">Notengeschwindigkeit</string>
+    <string name="option_follow_screen">Bildschirmverhältnis folgen</string>
+    <string name="option_manual_input">Manuelle Eingabe</string>
+    <string name="setting_mirror_x">Spiegel-Demo (X-Achse)</string>
+    <string name="setting_autoplay">Autoplay</string>
+    <string name="setting_challenge_mode">Challenge-Modus</string>
+    <string name="setting_background_brightness">Hintergrund abdunkeln</string>
+    <string name="setting_low_res_mode">Niedrige Auflösung</string>
+    <string name="setting_antialias">Kantenglättung</string>
+    <string name="setting_show_fps">FPS anzeigen</string>
+    <string name="setting_show_debug">Debug-Infos anzeigen</string>
+    <string name="setting_multi_highlight">Gleichzeitige Noten hervorheben</string>
+    <string name="setting_apfc_indicator">AP-/FC-Anzeige</string>
+
+    <string name="section_music_volume">Musiklautstärke</string>
+    <string name="section_sfx_volume">Hitsound-Lautstärke</string>
+    <string name="section_music_speed">Musikgeschwindigkeit</string>
+
+    <string name="setting_replay_recording">Replay-Aufzeichnung aktivieren</string>
+    <string name="section_replay_manage">Replay-Verwaltung</string>
+    <string name="replay_empty">Keine Replay-Einträge</string>
+    <string name="dialog_confirm_delete">Löschen bestätigen</string>
+    <string name="dialog_delete_replay_message">%1$d ausgewählte Replays löschen?</string>
+    <string name="toast_replay_export_success">%1$d Replays nach Download/Chigros/ exportiert</string>
+    <string name="toast_replay_export_failed">Export fehlgeschlagen: %1$s</string>
+    <string name="toast_replay_data_corrupt">Replay-Daten sind beschädigt</string>
+    <string name="toast_replay_resources_incomplete">Replay-Ressourcen sind unvollständig</string>
+    <string name="toast_replay_import_success">Replay importiert</string>
+    <string name="toast_replay_import_failed">Replay-Import fehlgeschlagen: %1$s</string>
+    <string name="toast_replay_load_failed">Replay konnte nicht geladen werden: %1$s</string>
+    <string name="toast_replay_cache_missing">Replay-Cache existiert nicht</string>
+    <string name="toast_replay_already_saved">Replay ist bereits gespeichert</string>
+    <string name="toast_replay_saved">Replay gespeichert</string>
+    <string name="toast_replay_save_failed">Replay konnte nicht gespeichert werden: %1$s</string>
+
+    <string name="toast_pick_required_files">Zuerst Musik, Chart und Hintergrund wählen</string>
+    <string name="toast_fill_song_info">Songtitel und Schwierigkeit im Chart-Tab ausfüllen</string>
+    <string name="toast_copy_music_failed">Musik konnte nicht kopiert werden: %1$s</string>
+    <string name="toast_copy_chart_failed">Chart konnte nicht kopiert werden: %1$s</string>
+    <string name="toast_copy_background_failed">Hintergrund konnte nicht kopiert werden: %1$s</string>
+    <string name="toast_pack_parse_success">Paket analysiert</string>
+    <string name="toast_pack_too_large">Paket ist zu groß zum Laden</string>
+    <string name="toast_pack_failed">Paketverarbeitung fehlgeschlagen: %1$s</string>
+    <string name="toast_skin_import_success">Skin importiert</string>
+    <string name="toast_skin_import_failed">Skin-Import fehlgeschlagen: %1$s</string>
+    <string name="skin_builtin">Integrierter Skin</string>
+    <string name="error_create_skin_dir">Skin-Verzeichnis kann nicht erstellt werden</string>
+
+    <string name="loading_play">Laden...\n(Chart wird analysiert und Audio dekodiert)</string>
+    <string name="error_audio_too_large">Audiodatei ist zu groß zum Dekodieren. Versuche eine kleinere Audiodatei.</string>
+    <string name="error_chart_too_large">Chart-Datei ist zu groß zum Analysieren</string>
+    <string name="toast_load_oom">Nicht genug Speicher, um diesen Chart zu laden. Die Datei ist zu groß.</string>
+    <string name="toast_load_failed">Laden fehlgeschlagen: %1$s</string>
+    <string name="error_create_replay_dir">Replay-Verzeichnis kann nicht erstellt werden</string>
+    <string name="error_create_temp_dir">Temporäres Verzeichnis kann nicht erstellt werden</string>
+    <string name="error_replay_missing_json">Replay-Datei ist beschädigt: replay.json fehlt</string>
+    <string name="error_replay_missing_chart">Replay-Datei ist beschädigt: Chart-Datei fehlt</string>
+    <string name="error_replay_missing_audio">Replay-Datei ist beschädigt: Audiodatei fehlt</string>
+    <string name="error_replay_missing_image">Replay-Datei ist beschädigt: Bilddatei fehlt</string>
+    <string name="error_replay_json_not_found">Replay-Datei ist beschädigt: replay.json nicht gefunden</string>
+
+    <string name="combo_replay">REPLAY</string>
+    <string name="combo_autoplay">AUTOPLAY</string>
+    <string name="combo_combo">COMBO</string>
+
+    <string name="result_accuracy">ACCURACY</string>
+    <string name="result_max_combo">MAX COMBO</string>
+    <string name="result_std_deviation">STD DEVIATION</string>
+    <string name="result_perfect">PERFECT</string>
+    <string name="result_good">GOOD</string>
+    <string name="result_bad">BAD</string>
+    <string name="result_miss">MISS</string>
+    <string name="result_early">EARLY</string>
+    <string name="result_late">LATE</string>
+</resources>

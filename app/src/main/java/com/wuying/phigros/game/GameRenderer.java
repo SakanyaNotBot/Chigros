@@ -111,7 +111,7 @@ public class GameRenderer implements GLSurfaceView.Renderer {
             introStartNs = start;
         }
         long now = System.nanoTime();
-        float dur = INTRO_DUR_SEC; // 1.2s animation curve (hold is separate)
+        float dur = INTRO_LINE_DUR_SEC;
         if (dur <= 0f) {
             frameGlobalAlpha = 1f;
             frameIntroLinearT = 1f;
@@ -128,18 +128,39 @@ public class GameRenderer implements GLSurfaceView.Renderer {
             frameIntroLinearT = 1f;
             return 1f;
         }
-        float lineT = Math.min(t * 1.8f, 1f);
-        float scale = 1f - (float) Math.cos(lineT * Math.PI / 2.0);
         frameIntroLinearT = t;
-        float quickFade = Math.min(t * 3.0f, 1f);
-        frameGlobalAlpha = 0.75f + 0.25f * quickFade;
-        return scale;
+        frameGlobalAlpha = 1f;
+        return sampleCurve(BEGAN_JUDGE_LINE_SCALE_X, t);
+    }
+
+    private float elapsedIntroSeconds() {
+        if (!introStarted) return 0f;
+        long start = introStartNs;
+        if (start < 0L) return 0f;
+        return Math.max(0f, (System.nanoTime() - start) / 1_000_000_000f);
+    }
+
+    private float computeBackgroundDimAlpha() {
+        float alpha = backgroundDim;
+        if (introStarted) {
+            float p = MathUtils.clamp(elapsedIntroSeconds() / UI_INTRO_DUR_SEC, 0f, 1f);
+            alpha *= p * p * (3f - 2f * p);
+        } else {
+            alpha = 0f;
+        }
+        if (isInOutro && outroStartWallNs > 0L) {
+            float elapsedSec = (System.nanoTime() - outroStartWallNs) / 1_000_000_000f - UI_OUTRO_WAIT_SEC;
+            float p = MathUtils.clamp(elapsedSec / UI_OUTRO_DUR_SEC, 0f, 1f);
+            float smooth = p * p * (3f - 2f * p);
+            alpha *= 1f - smooth;
+        }
+        return MathUtils.clamp(alpha, 0f, 1f);
     }
 
     /**
-     * Exit animation: triggered when music reaches totalTimeSec. Uses wall-clock quart ease-in.
+     * Exit animation: triggered when music reaches totalTimeSec.
      */
-    private float computeOutroAlpha(double musicPosSec) {
+    private void updateOutroState(double musicPosSec) {
         if (!isInOutro) {
             if (musicPosSec >= totalTimeSec) {
                 isInOutro = true;
@@ -162,27 +183,8 @@ public class GameRenderer implements GLSurfaceView.Renderer {
         }
 
         if (!isInOutro) {
-            frameOutroLineScale = 1f;
-            return 1f;
+            return;
         }
-
-        long elapsedNs = System.nanoTime() - outroStartWallNs;
-        float elapsedSec = elapsedNs / 1_000_000_000f;
-        float durSec = OUTRO_DUR_SEC;
-
-        if (elapsedSec <= 0f) {
-            frameOutroLineScale = 1f;
-            return 1f;
-        }
-        if (elapsedSec >= durSec) {
-            frameOutroLineScale = 0f;
-            return 1f;
-        }
-
-        float _progress = elapsedSec / durSec;
-        float progress = (float) Math.pow(1.0 - _progress, 4.0);
-        frameOutroLineScale = progress;
-        return 1f;
     }
 
 
@@ -290,20 +292,52 @@ public class GameRenderer implements GLSurfaceView.Renderer {
     private volatile boolean skinHoldKeepHead = false;
     private volatile boolean skinHoldRepeat = false;
 
-    // intro: animation (1.2s) + hold (0.2s) before music/chart starts.
-    // During the animation, a fake judge line extends from center to full width.
-    // During the hold, the fake line stays at full width, then real lines appear.
-    public static final long INTRO_BUFFER_MS = 1400L; // total: 1200ms animation + 200ms hold
-    public static final float INTRO_DUR_SEC = 1.2f;   // animation curve duration
-    public static final float INTRO_HOLD_SEC = 0.2f;   // hold after animation before transition
-    public static final float OUTRO_DUR_SEC = 1.5f;    // 1500ms exit animation
-    public static final float OUTRO_WAIT_SEC = 0.0f;   // exit starts immediately at music end
-    // HUD in/out animation (Cubic ease, 1.2s)
-    private static final float UI_INTRO_DUR_SEC = 1.2f;
-    private static final float UI_OUTRO_DUR_SEC = 1.2f;
-    private static final float UI_OUTRO_WAIT_SEC = 0.3f;
+    // Official scene split:
+    // - GameCanvas/Began.anim expands the fake judge line over 55 frames and
+    //   hides it at frame 65.
+    // - UI/LevelStart.anim and UI/LevelOver.anim drive HUD/background over
+    //   40 frames.
+    public static final float INTRO_LINE_DUR_SEC = 55f / 60f;
+    public static final float INTRO_HOLD_SEC = 10f / 60f;
+    public static final long INTRO_AUDIO_DELAY_MS = 1083L;
+    public static final long INTRO_BUFFER_MS = INTRO_AUDIO_DELAY_MS;
+    private static final float UI_INTRO_DUR_SEC = 40f / 60f;
+    private static final float UI_OUTRO_DUR_SEC = 40f / 60f;
+    private static final float COMBO_LABEL_OUTRO_FADE_SEC = 35f / 60f;
+    public static final float OUTRO_DUR_SEC = 1.5f;
+    public static final float OUTRO_WAIT_SEC = 0.0f;
+    private static final float UI_OUTRO_WAIT_SEC = 0.0f;
+    private static final float OFFICIAL_UI_ROOT_SCALE_Y_START = 1.1875f;
+    private static final float[] BEGAN_JUDGE_LINE_SCALE_X = new float[]{
+            0.0000000f, 0.0004785f, 0.0011947f, 0.0021729f,
+            0.0034413f, 0.0050326f, 0.0069859f, 0.0093477f,
+            0.0121742f, 0.0155344f, 0.0195135f, 0.0242201f,
+            0.0297935f, 0.0364185f, 0.0443471f, 0.0539350f,
+            0.0657090f, 0.0804966f, 0.0997056f, 0.1260097f,
+            0.1653046f, 0.2320033f, 0.3332065f, 0.4175731f,
+            0.4773408f, 0.5234603f, 0.5614561f, 0.5940762f,
+            0.6228563f, 0.6487398f, 0.6723500f, 0.6941195f,
+            0.7143646f, 0.7333211f, 0.7511719f, 0.7680620f,
+            0.7841066f, 0.7994009f, 0.8140248f, 0.8280444f,
+            0.8415143f, 0.8544856f, 0.8669972f, 0.8790865f,
+            0.8907873f, 0.9021233f, 0.9131252f, 0.9238101f,
+            0.9342016f, 0.9443144f, 0.9541675f, 0.9637740f,
+            0.9731488f, 0.9823037f, 0.9912493f, 1.0000000f
+    };
+    private static final float[] LEVEL_START_ROOT_SCALE_Y = new float[]{
+            1.1875000f, 1.1871370f, 1.1859880f, 1.1839500f,
+            1.1809180f, 1.1767850f, 1.1714640f, 1.1649030f,
+            1.1571190f, 1.1482240f, 1.1384360f, 1.1280640f,
+            1.1174500f, 1.1069190f, 1.0967300f, 1.0870610f,
+            1.0780130f, 1.0696320f, 1.0619220f, 1.0548630f,
+            1.0484230f, 1.0425640f, 1.0372430f, 1.0324230f,
+            1.0280630f, 1.0241300f, 1.0205910f, 1.0174170f,
+            1.0145810f, 1.0120580f, 1.0098270f, 1.0078690f,
+            1.0061640f, 1.0046970f, 1.0034540f, 1.0024200f,
+            1.0015830f, 1.0009330f, 1.0004580f, 1.0001500f,
+            1.0000000f
+    };
     // Slide distance (matching 100 logical pixels in 900-tall space ≈ 11.1%)
-    private static final float HUD_SLIDE_RATIO = 0.111f;
     private volatile long introStartNs = -1L;
     private volatile boolean introStarted = false;
     private volatile boolean introAutoResumePending = false;
@@ -311,12 +345,11 @@ public class GameRenderer implements GLSurfaceView.Renderer {
     /** Set by restartInternal() to defer beginIntro() to the GL thread. */
     private volatile boolean restartIntroNeedsInit = false;
     private float frameIntroLineScale = 0f;
-    private float frameOutroLineScale = 1f;
     private float frameGlobalAlpha = 0f;
-    // Linear intro progress (0→1 over INTRO_DUR_SEC), cached for HUD animation
+    // Linear intro line progress over INTRO_LINE_DUR_SEC, cached for transition gates.
     private float frameIntroLinearT = 0f;
     private boolean isInOutro = false;
-    private volatile boolean wasInIntroOrOutro = true; // tracks previous-frame inIntroOrOutro
+    private volatile boolean wasInIntro = true; // tracks previous-frame intro/pre-music gate
     /** Audio-playhead value captured when the intro/hold animation finished.
      *  Subtracted from the measured playhead so that the first real chart frame
      *  always starts at t=0 regardless of when the audio engine began reporting. */
@@ -364,6 +397,7 @@ public class GameRenderer implements GLSurfaceView.Renderer {
     // Textures
     private Texture texBackground;
     private Texture texPause;
+    private Texture texNoteRing;
     private Texture texExit;
     private Texture texRestart;
     private Texture texContinue;
@@ -516,6 +550,13 @@ public class GameRenderer implements GLSurfaceView.Renderer {
     // UI rects (screen space)
     private final RectF pauseRect = new RectF();
     private float pauseHitPadPx = 0f;
+    private static final float PAUSE_TOUCH_FADE_IN_SEC = 0.25f;
+    private static final float PAUSE_TOUCH_VISIBLE_SEC = 1.0f;
+    private static final float PAUSE_TOUCH_RING_SIZE_UI = 63.488f;
+    private static final float PAUSE_TOUCH_RING_OFFSET_X_UI = -1.7f;
+    private static final float PAUSE_TOUCH_RING_OFFSET_Y_UI = 0.69f;
+    private static final float PAUSE_TOUCH_RING_ALPHA_MAX = 0.2f;
+    private long pauseTouchStartNs = -1L;
     private final RectF exitRect = new RectF();
     private final RectF restartRect = new RectF();
     private final RectF continueRect = new RectF();
@@ -524,7 +565,7 @@ public class GameRenderer implements GLSurfaceView.Renderer {
     private long lastPauseTapTimeMs = 0;
     private float lastPauseTapX = 0f;
     private float lastPauseTapY = 0f;
-    private static final long DOUBLE_TAP_TIMEOUT_MS = 350;
+    private static final long DOUBLE_TAP_TIMEOUT_MS = 1000;
     private static final float DOUBLE_TAP_MAX_DIST_DP = 40f;
 
     // State
@@ -889,6 +930,7 @@ public class GameRenderer implements GLSurfaceView.Renderer {
 
     public void onDoubleTap(float x, float y) {
         if (!menuVisible && isInPauseHitArea(x, y)) {
+            triggerPauseTouchFeedback();
             menuVisible = true;
             pauseMode = PAUSE_MENU;
             resumeCountdownStartNs = -1L;
@@ -902,6 +944,10 @@ public class GameRenderer implements GLSurfaceView.Renderer {
         float pad = pauseHitPadPx;
         return x >= pauseRect.left - pad && x <= pauseRect.right + pad
                 && y >= pauseRect.top - pad && y <= pauseRect.bottom + pad;
+    }
+
+    private void triggerPauseTouchFeedback() {
+        pauseTouchStartNs = System.nanoTime();
     }
 
     /**
@@ -918,7 +964,6 @@ public class GameRenderer implements GLSurfaceView.Renderer {
     }
 
     public void onTouchEvent(@NonNull MotionEvent e) {
-        if (autoplay && !replayPlayback) return;
         if (viewW <= 1 || viewH <= 1) return;
 
         final int action = e.getActionMasked();
@@ -936,6 +981,8 @@ public class GameRenderer implements GLSurfaceView.Renderer {
                 handleUiTap(tx, ty);
             }
         }
+
+        if (autoplay && !replayPlayback) return;
 
         // Always track touch state (activeTouches, flickTrackers) even during pause.
         // This prevents stale "phantom fingers" and ensures real fingers are tracked
@@ -1034,6 +1081,7 @@ public class GameRenderer implements GLSurfaceView.Renderer {
         } else {
             // Double-tap pause detection
             if (isInPauseHitArea(rawX, rawY)) {
+                triggerPauseTouchFeedback();
                 long now = System.currentTimeMillis();
                 float dx = rawX - lastPauseTapX;
                 float dy = rawY - lastPauseTapY;
@@ -1138,6 +1186,7 @@ public class GameRenderer implements GLSurfaceView.Renderer {
         pauseMode = PAUSE_NONE;
         resumeCountdownStartNs = -1L;
         resumeFadeOutStartNs = -1L;
+        pauseTouchStartNs = -1L;
 
         isInOutro = false;
         outroStartTimeSec = -1f;
@@ -1149,9 +1198,8 @@ public class GameRenderer implements GLSurfaceView.Renderer {
         isMusicStartedFlag = false;
         introStartNs = -1L;
         frameIntroLineScale = 0f;
-        frameOutroLineScale = 1f;
         frameGlobalAlpha = 0f;
-        wasInIntroOrOutro = true;
+        wasInIntro = true;
         musicReferenceAtIntroExit = 0.0;
         frameIntroLinearT = 0f;
 
@@ -1203,6 +1251,7 @@ public class GameRenderer implements GLSurfaceView.Renderer {
         hitEffects.clear();
         badEffects.clear();
         lastPauseTapTimeMs = 0;
+        pauseTouchStartNs = -1L;
     }
 
     private float transformTouchX(float x) {
@@ -1672,6 +1721,7 @@ public class GameRenderer implements GLSurfaceView.Renderer {
 
         // Load textures (assets)
         texPause = loadTextureFromAssetsSafe("res/pause.png");
+        texNoteRing = loadTextureFromAssetsSafe("res/NoteRing.png");
         // Pause menu icons: force to white (preserve alpha)
         texExit = loadTextureFromAssetsSafe("res/exit.png", true);
         texRestart = loadTextureFromAssetsSafe("res/restart.png", true);
@@ -1894,7 +1944,6 @@ public class GameRenderer implements GLSurfaceView.Renderer {
             }
         }
         if (!menuVisible || pauseMode == PAUSE_FADEOUT) {
-            // exit animation completes after 1500ms wall-clock time
             if (isInOutro) {
                 long elapsedNs = System.nanoTime() - outroStartWallNs;
                 float elapsedSec = elapsedNs / 1_000_000_000f;
@@ -2710,7 +2759,7 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
         if (restartIntroNeedsInit) {
             restartIntroNeedsInit = false;
             beginIntro();
-            wasInIntroOrOutro = true;
+            wasInIntro = true;
             introAutoResumePending = true;
             introAutoResumeAtNs = introStartNs + (long) (INTRO_BUFFER_MS * 1_000_000L);
         }
@@ -2729,7 +2778,7 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
         }
         final double musicPos = getSmoothedPlayheadSeconds();
         frameIntroLineScale = computeIntroLineScale();
-        float outroAlpha = computeOutroAlpha(musicPos);
+        updateOutroState(musicPos);
         frameGlobalAlpha = introStarted ? 1f : 0f;
 
         // 200ms hold after intro animation completes.
@@ -2749,25 +2798,26 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
             }
         }
 
-        // during intro, hold, outro, or before music starts, use fake line and clamp t
-        boolean inIntroOrOutro = (frameIntroLineScale < 0.999f) || isInIntroHold || isInOutro || !isMusicStartedFlag;
+        // Intro, hold, and pre-music use the official fake line. Outro keeps real chart lines.
+        boolean inIntro = (frameIntroLineScale < 0.999f) || isInIntroHold || !isMusicStartedFlag;
+        boolean blockGameplayForTransition = inIntro || isInOutro;
 
-        // When exiting the intro/hold/outro state on this frame, snapshot the
+        // When exiting the intro/hold/pre-music state on this frame, snapshot the
         // audio playhead as a reference.  Subtracting this reference from
         // every subsequent musicPos reading makes the first real chart frame
         // start at t≈0 regardless of whether the audio was unpaused by
         // maybeAutoResumeAfterIntro() (restart) or by PlayActivity (initial
         // start), and without any hard t=0 discontinuity.
-        final boolean justExitedIntro = (!inIntroOrOutro && wasInIntroOrOutro);
+        final boolean justExitedIntro = (!inIntro && wasInIntro);
         if (justExitedIntro) {
             musicReferenceAtIntroExit = musicPos;
             smoothClockInit = false;
             isMusicStartedFlag = true;
         }
-        wasInIntroOrOutro = inIntroOrOutro;
+        wasInIntro = inIntro;
 
         double t;
-        if (inIntroOrOutro) {
+        if (blockGameplayForTransition) {
             // during enter/hold/exit, chart time is clamped to 0
             t = Math.max(0.0, musicPos - musicReferenceAtIntroExit
                               - chart.offset - userOffsetSec);
@@ -2784,9 +2834,7 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
             drawSolidRect(stageL, stageT, stageW, stageH, 0f, 0f, 0f, frameGlobalAlpha);
         }
 
-        // backgroundDim is applied independently (not multiplied by globalAlpha).
-        // during exit, bg dim fades out (cover.alpha = bgDim * progress)
-        float dimAlpha = backgroundDim;
+        float dimAlpha = computeBackgroundDimAlpha();
         drawSolidRect(stageL, stageT, stageW, stageH, 0f, 0f, 0f, dimAlpha);
 
         updateGameplay(t);
@@ -2813,15 +2861,13 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
             }
         }
 
-        // during intro, hold, and outro, draw a single fake judgment line
-        // at the center of the stage instead of the real chart judgment lines.
+        // During intro only, draw the official fake judgment line at the center.
+        // Outro has no fake line; real chart lines continue to render.
         // Real lines are hidden (alpha=0) — only the fake line animates.
-        // (inIntroOrOutro is computed above, after computeIntroLineScale)
 
-        if (inIntroOrOutro) {
+        if (inIntro) {
             // Draw fake judgment line at center of stage (fakeJudgeline)
-            float combinedScale = frameIntroLineScale * frameOutroLineScale;
-            drawFakeJudgeLine(combinedScale);
+            drawFakeJudgeLine(frameIntroLineScale);
         } else if (lines != null) {
             // Normal gameplay: draw real chart judgment lines
             for (int oi = 0; oi < lineDrawOrder.length; oi++) {
@@ -2850,9 +2896,8 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
             }
         }
 
-        // notes are hidden during intro, hold, and exit animation
-        // (inIntroOrOutro already includes intro, hold, and outro states)
-        boolean blockNotesDuringIntro = inIntroOrOutro || t < 0;
+        // Notes are hidden during intro, hold, and exit animation.
+        boolean blockNotesDuringIntro = blockGameplayForTransition || t < 0;
 
         if (!blockNotesDuringIntro && lines != null) {
             Texture[] holdTextures = {texHold, texHoldMh};
@@ -4459,7 +4504,12 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
         }
     }
 
-    private void drawHudTexts(float hudAlpha, float slideAmount, double chartTimeSec, float stageAspect, float lineScale) {
+    private void drawHudTexts(float hudAlpha,
+                              float hudRootScaleY,
+                              float hudOutroT,
+                              double chartTimeSec,
+                              float stageAspect,
+                              float lineScale) {
         updateHudTextTexturesIfNeeded();
 
         if (lineScale <= 0f) return;
@@ -4478,7 +4528,7 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
                     left + hudTexSongTitle.width * 0.5f,
                     y + hudTexSongTitle.height * 0.5f,
                     hudTexSongTitle.width, hudTexSongTitle.height,
-                    UI_ELEMENT_NAME, hudAlpha, slideAmount, chartTimeSec, stageAspect, lineScale);
+                    UI_ELEMENT_NAME, hudAlpha, hudRootScaleY, chartTimeSec, stageAspect, lineScale);
         }
 
         // Difficulty: localPosition = (halfUiW - 40, -473.2), size 650x46, pivot bottom-right.
@@ -4491,7 +4541,7 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
                     x + hudTexDifficulty.width * 0.5f,
                     y + hudTexDifficulty.height * 0.5f,
                     hudTexDifficulty.width, hudTexDifficulty.height,
-                    UI_ELEMENT_LEVEL, hudAlpha, slideAmount, chartTimeSec, stageAspect, lineScale);
+                    UI_ELEMENT_LEVEL, hudAlpha, hudRootScaleY, chartTimeSec, stageAspect, lineScale);
         }
 
         // Score: localPosition = (halfUiW - 237.3888, 445.7), size 400x100, pivot center.
@@ -4507,7 +4557,7 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
                     x + hudTexScore.width * 0.5f,
                     y + hudTexScore.height * 0.5f,
                     hudTexScore.width, hudTexScore.height,
-                    UI_ELEMENT_SCORE, hudAlpha, slideAmount, chartTimeSec, stageAspect, lineScale);
+                    UI_ELEMENT_SCORE, hudAlpha, hudRootScaleY, chartTimeSec, stageAspect, lineScale);
         }
 
         // Combo: number and label are separate centered RectTransforms.
@@ -4517,14 +4567,22 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
             applyUiTransformAndDraw(hudTexComboNum,
                     centerX, numCenterY,
                     hudTexComboNum.width, hudTexComboNum.height,
-                    UI_ELEMENT_COMBO_NUMBER, hudAlpha, slideAmount, chartTimeSec, stageAspect, lineScale);
+                    UI_ELEMENT_COMBO_NUMBER, hudAlpha, hudRootScaleY, chartTimeSec, stageAspect, lineScale);
 
             float labelCenterY = officialHudY(OFFICIAL_HUD_COMBO_TEXT_Y);
+            float comboLabelAlpha = hudAlpha * officialComboLabelOutroAlpha(hudOutroT);
             applyUiTransformAndDraw(hudTexComboLabel,
                     centerX, labelCenterY,
                     hudTexComboLabel.width, hudTexComboLabel.height,
-                    UI_ELEMENT_COMBO, hudAlpha, slideAmount, chartTimeSec, stageAspect, lineScale);
+                    UI_ELEMENT_COMBO, comboLabelAlpha, hudRootScaleY, chartTimeSec, stageAspect, lineScale);
         }
+    }
+
+    private static float officialComboLabelOutroAlpha(float hudOutroT) {
+        if (hudOutroT <= 0f) return 1f;
+        float p = MathUtils.clamp(hudOutroT * UI_OUTRO_DUR_SEC / COMBO_LABEL_OUTRO_FADE_SEC, 0f, 1f);
+        float smooth = p * p * (3f - 2f * p);
+        return 1f - smooth;
     }
 
     /** Draws all in-game HUD elements (pause button, progress bar, score/combo texts). */
@@ -4590,28 +4648,25 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
                                          float baseCenterX, float baseCenterY,
                                          float baseW, float baseH,
                                          int elementId,
-                                         float hudAlpha, float slideAmount,
+                                         float hudAlpha, float hudRootScaleY,
                                          double chartTimeSec,
                                          float stageAspect,
                                          float lineScale) {
         applyUiTransformAndDrawUv(tex, baseCenterX, baseCenterY, baseW, baseH, elementId,
-                hudAlpha, slideAmount, chartTimeSec, stageAspect, 0f, 0f, 1f, 1f, lineScale);
+                hudAlpha, hudRootScaleY, chartTimeSec, stageAspect, 0f, 0f, 1f, 1f, lineScale);
     }
 
     private void applyUiTransformAndDrawUv(Texture tex,
                                            float baseCenterX, float baseCenterY,
                                            float baseW, float baseH,
                                            int elementId,
-                                           float hudAlpha, float slideAmount,
+                                           float hudAlpha, float hudRootScaleY,
                                            double chartTimeSec,
                                            float stageAspect,
                                            float u0, float v0, float u1, float v1,
                                            float lineScale) {
-        // Slide distance matches: lineScale * 1.75
-        float slidePx = slideAmount * lineScale * 1.75f;
-        boolean bottom = (elementId == UI_ELEMENT_NAME || elementId == UI_ELEMENT_LEVEL);
         float baseCx = baseCenterX;
-        float baseCy = baseCenterY + (bottom ? slidePx : -slidePx);
+        float baseCy = baseCenterY;
 
         float x = baseCx;
         float y = baseCy;
@@ -4619,6 +4674,7 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
         float h = baseH;
         float rot = 0f;
         float a = hudAlpha;
+        float rootScaleY = (Float.isFinite(hudRootScaleY) && hudRootScaleY > 0f) ? hudRootScaleY : 1f;
 
         JudgeLine.StateHolder st = getAttachUiState(elementId, chartTimeSec, stageAspect);
         if (st != null) {
@@ -4712,56 +4768,81 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
             float g = Float.isFinite(st.colorG) ? st.colorG : 1f;
             float b = Float.isFinite(st.colorB) ? st.colorB : 1f;
 
+            float rootY = stageT + stageH * 0.5f;
+            y = rootY + (y - rootY) * rootScaleY;
+            drawH *= rootScaleY;
+
             drawTextureAnchored(tex, x, y, drawW, drawH, rot + rotDeg,
                     r, g, b, a,
                     0.5f, 0.5f, uu0, vv0, uu1, vv1);
             return;
         }
 
+        float rootY = stageT + stageH * 0.5f;
+        y = rootY + (y - rootY) * rootScaleY;
+        h *= rootScaleY;
         drawTextureAnchored(tex, x, y, w, h, rot, 1f, 1f, 1f, a,
                 0.5f, 0.5f, u0, v0, u1, v1);
     }
 
     private void drawGameHudWithAnimations() {
-        double musicPos = getSmoothedPlayheadSeconds();
-        // Use cached frameIntroLineScale (computed in renderSceneDirect earlier this frame)
-        float introLineScale = frameIntroLineScale;
-
-        // Compute lineScale for slide distance (matches: Math.min(stageH/18.75, stageW/14.0625))
+        // Keep lineScale for existing attachUI distance semantics.
         float lineScale = (stageW > stageH * 0.75f) ? (stageH / 18.75f) : (stageW / 14.0625f);
 
-        // --- HUD intro (easeOutSine slide from edges, matches: tween.easeOutSine(time * 1.5)) ---
+        // UI/LevelStart.anim drives root scale.y from 1.1875 to 1 over 40 frames.
         float hudIntro;
-        if (frameIntroLinearT >= 1f) {
+        float hudT = elapsedIntroSeconds() / UI_INTRO_DUR_SEC;
+        if (hudT >= 1f) {
             hudIntro = 1f; // intro finished, HUD fully visible
         } else {
-            // Multiplier 1.8 = 1.2 (intro duration) * 1.5 (ease multiplier)
-            float hudT = Math.min(frameIntroLinearT * 1.8f, 1f);
             // easeOutSine: sin(t * π/2) — matches tween.easeOutSine
-            hudIntro = (float) Math.sin(hudT * Math.PI / 2.0);
+            hudIntro = officialLevelStartEase(hudT);
         }
 
-        // --- HUD outro (: quartic ease-in, wall-clock based, 1500ms) ---
-        float hudOutro = 0f;
+        // UI/LevelOver.anim drives root scale.y from 1 to 1.1875 over 40 frames.
+        float hudOutroT = 0f;
         if (isInOutro && outroStartWallNs > 0L) {
             long elapsedNs = System.nanoTime() - outroStartWallNs;
-            float elapsedSec = elapsedNs / 1_000_000_000f;
-            float durSec = OUTRO_DUR_SEC;
+            float elapsedSec = elapsedNs / 1_000_000_000f - UI_OUTRO_WAIT_SEC;
+            float durSec = UI_OUTRO_DUR_SEC;
             if (elapsedSec >= durSec) {
-                hudOutro = 1f;
+                hudOutroT = 1f;
             } else if (elapsedSec > 0f) {
                 float _progress = elapsedSec / durSec;
                 // exit: progress = (1 - _progress)^4 → fades from 1→0
-                // hudOutro is the "amount off-screen": 1 - progress = 1 - (1 - _progress)^4
-                float progress = (float) Math.pow(1.0 - _progress, 4.0);
-                hudOutro = 1f - progress;
+                hudOutroT = MathUtils.clamp(_progress, 0f, 1f);
             }
         }
 
-        float hudAlpha = hudIntro * (1f - hudOutro);
-        float slideAmount = (1f - hudIntro) + hudOutro;
+        float introRootScaleY = 1f + (OFFICIAL_UI_ROOT_SCALE_Y_START - 1f) * (1f - hudIntro);
+        float outroRootScaleY = officialLevelOverRootScaleY(hudOutroT);
+        float hudRootScaleY = hudOutroT > 0f ? outroRootScaleY : introRootScaleY;
+        float hudAlpha = introStarted ? 1f : 0f;
 
-        drawGameHud(hudAlpha, slideAmount, lineScale);
+        drawGameHud(hudAlpha, hudRootScaleY, hudOutroT, lineScale);
+    }
+
+    private static float sampleCurve(float[] samples, float t) {
+        if (samples == null || samples.length == 0) return MathUtils.clamp(t, 0f, 1f);
+        if (samples.length == 1) return samples[0];
+        float p = MathUtils.clamp(t, 0f, 1f) * (samples.length - 1);
+        int i = (int) Math.floor(p);
+        if (i >= samples.length - 1) return samples[samples.length - 1];
+        float f = p - i;
+        return samples[i] + (samples[i + 1] - samples[i]) * f;
+    }
+
+    private static float officialLevelStartEase(float t) {
+        float rootScaleY = sampleCurve(LEVEL_START_ROOT_SCALE_Y, t);
+        float denom = OFFICIAL_UI_ROOT_SCALE_Y_START - 1f;
+        if (Math.abs(denom) < 1e-6f) return MathUtils.clamp(t, 0f, 1f);
+        return MathUtils.clamp((OFFICIAL_UI_ROOT_SCALE_Y_START - rootScaleY) / denom, 0f, 1f);
+    }
+
+    private static float officialLevelOverRootScaleY(float t) {
+        float p = MathUtils.clamp(t, 0f, 1f);
+        float smooth = p * p * (3f - 2f * p);
+        return 1f + (OFFICIAL_UI_ROOT_SCALE_Y_START - 1f) * smooth;
     }
 
     private void drawGameHudWithAnimationsClipped() {
@@ -4775,7 +4856,7 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
     }
 
     /** Draws all in-game HUD elements (pause button, progress bar, texts) with attachUI + animations. */
-    private void drawGameHud(float hudAlpha, float slideAmount, float lineScale) {
+    private void drawGameHud(float hudAlpha, float hudRootScaleY, float hudOutroT, float lineScale) {
         final double chartTimeSec = (getSmoothedPlayheadSeconds() - chart.offset - userOffsetSec);
         final float stageAspect = (stageH > 1e-6f) ? (stageW / stageH) : (16f / 9f);
 
@@ -4785,20 +4866,50 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
             float cy = pauseRect.top + pauseRect.height() * 0.5f;
             float drawH = pauseRect.height();
             float drawW = drawH * OFFICIAL_HUD_PAUSE_VISUAL_ASPECT;
+            drawPauseTouchRing(cx, cy, hudAlpha, hudRootScaleY, chartTimeSec, stageAspect, lineScale);
             applyUiTransformAndDraw(texPause, cx, cy, drawW, drawH,
-                    UI_ELEMENT_PAUSE, hudAlpha, slideAmount, chartTimeSec, stageAspect, lineScale);
+                    UI_ELEMENT_PAUSE, hudAlpha, hudRootScaleY, chartTimeSec, stageAspect, lineScale);
         }
 
         // progress bar (top of stage)
-        drawTimerLine(hudAlpha, slideAmount, chartTimeSec, stageAspect, lineScale);
+        drawTimerLine(hudAlpha, hudRootScaleY, chartTimeSec, stageAspect, lineScale);
 
         // texts
-        drawHudTexts(hudAlpha, slideAmount, chartTimeSec, stageAspect, lineScale);
+        drawHudTexts(hudAlpha, hudRootScaleY, hudOutroT, chartTimeSec, stageAspect, lineScale);
         
         // FPS counter (top-right corner, for debugging unlimited frame rate mode)
         if (showFps && currentFps > 0f) {
             drawFpsCounter(hudAlpha);
         }
+    }
+
+    private void drawPauseTouchRing(float pauseCx,
+                                    float pauseCy,
+                                    float hudAlpha,
+                                    float hudRootScaleY,
+                                    double chartTimeSec,
+                                    float stageAspect,
+                                    float lineScale) {
+        long start = pauseTouchStartNs;
+        if (start <= 0L || texNoteRing == null) return;
+
+        float elapsedSec = (System.nanoTime() - start) / 1_000_000_000f;
+        if (elapsedSec < 0f) return;
+        if (elapsedSec >= PAUSE_TOUCH_VISIBLE_SEC) {
+            pauseTouchStartNs = -1L;
+            return;
+        }
+
+        float p = MathUtils.clamp(elapsedSec / PAUSE_TOUCH_FADE_IN_SEC, 0f, 1f);
+        float alpha = hudAlpha * PAUSE_TOUCH_RING_ALPHA_MAX * p;
+        if (alpha <= 0.001f) return;
+
+        float unit = officialHudUnitPx();
+        float ringCx = pauseCx + PAUSE_TOUCH_RING_OFFSET_X_UI * unit;
+        float ringCy = pauseCy - PAUSE_TOUCH_RING_OFFSET_Y_UI * unit;
+        float size = officialHudSize(PAUSE_TOUCH_RING_SIZE_UI);
+        applyUiTransformAndDraw(texNoteRing, ringCx, ringCy, size, size,
+                UI_ELEMENT_PAUSE, alpha, hudRootScaleY, chartTimeSec, stageAspect, lineScale);
     }
     
     private Texture hudTexFps;
@@ -5039,7 +5150,7 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
         GLES20.glViewport(0, 0, oldW, oldH);
     }
 
-    private void drawTimerLine(float hudAlpha, float slideAmount, double chartTimeSec, float stageAspect, float lineScale) {
+    private void drawTimerLine(float hudAlpha, float hudRootScaleY, double chartTimeSec, float stageAspect, float lineScale) {
         if (texTimerLine == null) return;
 
         double musicPos = NativeAudioEngine.getPlayheadSeconds();
@@ -5071,7 +5182,7 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
         float cy = top + barH * 0.5f;
 
         applyUiTransformAndDrawUv(texTimerLine, cx, cy, drawW, barH,
-                UI_ELEMENT_BAR, hudAlpha, slideAmount, chartTimeSec, stageAspect,
+                UI_ELEMENT_BAR, hudAlpha, hudRootScaleY, chartTimeSec, stageAspect,
                 u0, 0f, u1, 1f, lineScale);
     }
 

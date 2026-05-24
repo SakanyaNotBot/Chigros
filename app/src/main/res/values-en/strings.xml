@@ -18,10 +18,12 @@
     <string name="action_export">Export</string>
     <string name="action_delete">Delete</string>
     <string name="action_cancel">Cancel</string>
+    <string name="action_export_selected">Export (%1$d)</string>
+    <string name="action_delete_selected">Delete (%1$d)</string>
 
     <string name="state_not_selected">Not selected</string>
     <string name="chart_pack">Chart Pack</string>
-    <string name="action_pick_zip_pack">Choose ZIP Chart Pack</string>
+    <string name="action_pick_zip_pack">Choose Chart Pack</string>
     <string name="section_pick_files">Choose Files Separately</string>
     <string name="status_music">Music: %1$s</string>
     <string name="status_chart">Chart: %1$s</string>

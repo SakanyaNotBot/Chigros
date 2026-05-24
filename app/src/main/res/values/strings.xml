@@ -17,10 +17,12 @@
     <string name="action_export">导出</string>
     <string name="action_delete">删除</string>
     <string name="action_cancel">取消</string>
+    <string name="action_export_selected">导出 (%1$d)</string>
+    <string name="action_delete_selected">删除 (%1$d)</string>
 
     <string name="state_not_selected">未选择</string>
     <string name="chart_pack">谱面包</string>
-    <string name="action_pick_zip_pack">选择 ZIP 谱面包</string>
+    <string name="action_pick_zip_pack">选择谱面包</string>
     <string name="section_pick_files">单独选择文件</string>
     <string name="status_music">音乐：%1$s</string>
     <string name="status_chart">谱面：%1$s</string>

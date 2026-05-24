@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Chigros</string>
+
+    <string name="tab_chart">Карта</string>
+    <string name="tab_video">Видео</string>
+    <string name="tab_audio">Аудио</string>
+    <string name="tab_replay">Повтор</string>
+
+    <string name="title_chart_settings">Настройки карты</string>
+    <string name="title_video_settings">Настройки видео</string>
+    <string name="title_audio_settings">Настройки аудио</string>
+    <string name="title_replay_settings">Настройки повторов</string>
+
+    <string name="action_start">Начать</string>
+    <string name="action_start_autoplay">Запустить авто</string>
+    <string name="action_import">Импорт</string>
+    <string name="action_export">Экспорт</string>
+    <string name="action_delete">Удалить</string>
+    <string name="action_cancel">Отмена</string>
+    <string name="action_export_selected">Экспорт (%1$d)</string>
+    <string name="action_delete_selected">Удалить (%1$d)</string>
+
+    <string name="state_not_selected">Не выбрано</string>
+    <string name="chart_pack">Пакет карт</string>
+    <string name="action_pick_zip_pack">Выбрать пакет карт</string>
+    <string name="section_pick_files">Выбрать файлы отдельно</string>
+    <string name="status_music">Музыка: %1$s</string>
+    <string name="status_chart">Карта: %1$s</string>
+    <string name="status_background">Фон: %1$s</string>
+    <string name="status_music_not_selected">Музыка: не выбрана</string>
+    <string name="status_chart_not_selected">Карта: не выбрана</string>
+    <string name="status_background_not_selected">Фон: не выбран</string>
+    <string name="action_pick_music">Выбрать музыку</string>
+    <string name="action_pick_chart">Выбрать файл карты</string>
+    <string name="action_pick_background">Выбрать фоновое изображение</string>
+    <string name="section_chart_info">Информация о карте</string>
+    <string name="hint_song_name">Название трека</string>
+    <string name="hint_difficulty">Сложность</string>
+    <string name="hint_chart_offset_ms">Смещение карты (мс)</string>
+    <string name="pack_loaded">Загружено: %1$s</string>
+    <string name="pack_item_music">Музыка</string>
+    <string name="pack_item_chart">Карта</string>
+    <string name="pack_item_background">Фон</string>
+
+    <string name="section_skin">Скин</string>
+    <string name="hint_select_skin">Выбрать скин</string>
+    <string name="section_aspect_ratio">Соотношение сторон сцены</string>
+    <string name="hint_aspect_decimal">Десятичное соотношение</string>
+    <string name="hint_preset">Шаблон</string>
+    <string name="section_key_scale">Размер нот</string>
+    <string name="section_scroll_speed">Скорость нот</string>
+    <string name="option_follow_screen">По соотношению экрана</string>
+    <string name="option_manual_input">Ручной ввод</string>
+    <string name="setting_mirror_x">Зеркальный режим (ось X)</string>
+    <string name="setting_autoplay">Автопрохождение</string>
+    <string name="setting_challenge_mode">Режим испытания</string>
+    <string name="setting_background_brightness">Затемнение фона</string>
+    <string name="setting_low_res_mode">Режим низкого разрешения</string>
+    <string name="setting_antialias">Сглаживание</string>
+    <string name="setting_show_fps">Показывать FPS</string>
+    <string name="setting_show_debug">Показывать отладочную информацию</string>
+    <string name="setting_multi_highlight">Подсвечивать одновременные ноты</string>
+    <string name="setting_apfc_indicator">Индикатор AP / FC</string>
+
+    <string name="section_music_volume">Громкость музыки</string>
+    <string name="section_sfx_volume">Громкость звуков нажатий</string>
+    <string name="section_music_speed">Скорость музыки</string>
+
+    <string name="setting_replay_recording">Включить запись повторов</string>
+    <string name="section_replay_manage">Управление повторами</string>
+    <string name="replay_empty">Нет записей повторов</string>
+    <string name="dialog_confirm_delete">Подтвердить удаление</string>
+    <string name="dialog_delete_replay_message">Удалить выбранные повторы: %1$d?</string>
+    <string name="toast_replay_export_success">Экспортировано повторов: %1$d в Download/Chigros/</string>
+    <string name="toast_replay_export_failed">Ошибка экспорта: %1$s</string>
+    <string name="toast_replay_data_corrupt">Данные повтора повреждены</string>
+    <string name="toast_replay_resources_incomplete">Ресурсы повтора неполные</string>
+    <string name="toast_replay_import_success">Повтор импортирован</string>
+    <string name="toast_replay_import_failed">Ошибка импорта повтора: %1$s</string>
+    <string name="toast_replay_load_failed">Ошибка загрузки повтора: %1$s</string>
+    <string name="toast_replay_cache_missing">Кэш повтора не существует</string>
+    <string name="toast_replay_already_saved">Повтор уже сохранен</string>
+    <string name="toast_replay_saved">Повтор сохранен</string>
+    <string name="toast_replay_save_failed">Ошибка сохранения повтора: %1$s</string>
+
+    <string name="toast_pick_required_files">Сначала выберите музыку, карту и фон</string>
+    <string name="toast_fill_song_info">Заполните название трека и сложность на вкладке карты</string>
+    <string name="toast_copy_music_failed">Не удалось скопировать музыку: %1$s</string>
+    <string name="toast_copy_chart_failed">Не удалось скопировать карту: %1$s</string>
+    <string name="toast_copy_background_failed">Не удалось скопировать фон: %1$s</string>
+    <string name="toast_pack_parse_success">Пакет разобран</string>
+    <string name="toast_pack_too_large">Пакет слишком большой для загрузки</string>
+    <string name="toast_pack_failed">Ошибка обработки пакета: %1$s</string>
+    <string name="toast_skin_import_success">Скин импортирован</string>
+    <string name="toast_skin_import_failed">Ошибка импорта скина: %1$s</string>
+    <string name="skin_builtin">Встроенный скин</string>
+    <string name="error_create_skin_dir">Не удалось создать каталог скинов</string>
+
+    <string name="loading_play">Загрузка...\n(Разбор карты и декодирование аудио)</string>
+    <string name="error_audio_too_large">Аудиофайл слишком большой для декодирования. Попробуйте файл меньшего размера.</string>
+    <string name="error_chart_too_large">Файл карты слишком большой для разбора</string>
+    <string name="toast_load_oom">Недостаточно памяти для загрузки этой карты. Файл слишком большой.</string>
+    <string name="toast_load_failed">Ошибка загрузки: %1$s</string>
+    <string name="error_create_replay_dir">Не удалось создать каталог повторов</string>
+    <string name="error_create_temp_dir">Не удалось создать временный каталог</string>
+    <string name="error_replay_missing_json">Файл повтора поврежден: отсутствует replay.json</string>
+    <string name="error_replay_missing_chart">Файл повтора поврежден: отсутствует файл карты</string>
+    <string name="error_replay_missing_audio">Файл повтора поврежден: отсутствует аудиофайл</string>
+    <string name="error_replay_missing_image">Файл повтора поврежден: отсутствует файл изображения</string>
+    <string name="error_replay_json_not_found">Файл повтора поврежден: replay.json не найден</string>
+
+    <string name="combo_replay">REPLAY</string>
+    <string name="combo_autoplay">AUTOPLAY</string>
+    <string name="combo_combo">COMBO</string>
+
+    <string name="result_accuracy">ACCURACY</string>
+    <string name="result_max_combo">MAX COMBO</string>
+    <string name="result_std_deviation">STD DEVIATION</string>
+    <string name="result_perfect">PERFECT</string>
+    <string name="result_good">GOOD</string>
+    <string name="result_bad">BAD</string>
+    <string name="result_miss">MISS</string>
+    <string name="result_early">EARLY</string>
+    <string name="result_late">LATE</string>
+</resources>

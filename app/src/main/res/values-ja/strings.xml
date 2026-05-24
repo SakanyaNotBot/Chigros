@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Chigros</string>
+
+    <string name="tab_chart">譜面</string>
+    <string name="tab_video">映像</string>
+    <string name="tab_audio">音声</string>
+    <string name="tab_replay">リプレイ</string>
+
+    <string name="title_chart_settings">譜面設定</string>
+    <string name="title_video_settings">映像設定</string>
+    <string name="title_audio_settings">音声設定</string>
+    <string name="title_replay_settings">リプレイ設定</string>
+
+    <string name="action_start">開始</string>
+    <string name="action_start_autoplay">自動再生を開始</string>
+    <string name="action_import">インポート</string>
+    <string name="action_export">エクスポート</string>
+    <string name="action_delete">削除</string>
+    <string name="action_cancel">キャンセル</string>
+    <string name="action_export_selected">エクスポート (%1$d)</string>
+    <string name="action_delete_selected">削除 (%1$d)</string>
+
+    <string name="state_not_selected">未選択</string>
+    <string name="chart_pack">譜面パック</string>
+    <string name="action_pick_zip_pack">譜面パックを選択</string>
+    <string name="section_pick_files">ファイルを個別に選択</string>
+    <string name="status_music">音楽：%1$s</string>
+    <string name="status_chart">譜面：%1$s</string>
+    <string name="status_background">背景：%1$s</string>
+    <string name="status_music_not_selected">音楽：未選択</string>
+    <string name="status_chart_not_selected">譜面：未選択</string>
+    <string name="status_background_not_selected">背景：未選択</string>
+    <string name="action_pick_music">音楽を選択</string>
+    <string name="action_pick_chart">譜面ファイルを選択</string>
+    <string name="action_pick_background">背景画像を選択</string>
+    <string name="section_chart_info">譜面情報</string>
+    <string name="hint_song_name">曲名</string>
+    <string name="hint_difficulty">難易度</string>
+    <string name="hint_chart_offset_ms">譜面オフセット (ms)</string>
+    <string name="pack_loaded">読み込み済み：%1$s</string>
+    <string name="pack_item_music">音楽</string>
+    <string name="pack_item_chart">譜面</string>
+    <string name="pack_item_background">背景</string>
+
+    <string name="section_skin">スキン</string>
+    <string name="hint_select_skin">スキンを選択</string>
+    <string name="section_aspect_ratio">ステージのアスペクト比</string>
+    <string name="hint_aspect_decimal">小数比</string>
+    <string name="hint_preset">プリセット</string>
+    <string name="section_key_scale">ノーツサイズ</string>
+    <string name="section_scroll_speed">ノーツ速度</string>
+    <string name="option_follow_screen">画面比率に合わせる</string>
+    <string name="option_manual_input">手動入力</string>
+    <string name="setting_mirror_x">ミラーデモ (X 軸)</string>
+    <string name="setting_autoplay">自動再生</string>
+    <string name="setting_challenge_mode">チャレンジモード</string>
+    <string name="setting_background_brightness">背景の暗さ</string>
+    <string name="setting_low_res_mode">低解像度モード</string>
+    <string name="setting_antialias">アンチエイリアス</string>
+    <string name="setting_show_fps">FPS を表示</string>
+    <string name="setting_show_debug">デバッグ情報を表示</string>
+    <string name="setting_multi_highlight">同時押しノーツを強調表示</string>
+    <string name="setting_apfc_indicator">AP / FC インジケーター</string>
+
+    <string name="section_music_volume">音楽音量</string>
+    <string name="section_sfx_volume">打鍵音量</string>
+    <string name="section_music_speed">音楽速度</string>
+
+    <string name="setting_replay_recording">リプレイ記録を有効化</string>
+    <string name="section_replay_manage">リプレイ管理</string>
+    <string name="replay_empty">リプレイ記録がありません</string>
+    <string name="dialog_confirm_delete">削除の確認</string>
+    <string name="dialog_delete_replay_message">選択した %1$d 件のリプレイを削除しますか？</string>
+    <string name="toast_replay_export_success">%1$d 件のリプレイを Download/Chigros/ にエクスポートしました</string>
+    <string name="toast_replay_export_failed">エクスポートに失敗しました：%1$s</string>
+    <string name="toast_replay_data_corrupt">リプレイデータが破損しています</string>
+    <string name="toast_replay_resources_incomplete">リプレイのリソースが不完全です</string>
+    <string name="toast_replay_import_success">リプレイをインポートしました</string>
+    <string name="toast_replay_import_failed">リプレイのインポートに失敗しました：%1$s</string>
+    <string name="toast_replay_load_failed">リプレイの読み込みに失敗しました：%1$s</string>
+    <string name="toast_replay_cache_missing">リプレイキャッシュが存在しません</string>
+    <string name="toast_replay_already_saved">リプレイは既に保存されています</string>
+    <string name="toast_replay_saved">リプレイを保存しました</string>
+    <string name="toast_replay_save_failed">リプレイの保存に失敗しました：%1$s</string>
+
+    <string name="toast_pick_required_files">先に音楽、譜面、背景を選択してください</string>
+    <string name="toast_fill_song_info">譜面タブで曲名と難易度を入力してください</string>
+    <string name="toast_copy_music_failed">音楽のコピーに失敗しました：%1$s</string>
+    <string name="toast_copy_chart_failed">譜面のコピーに失敗しました：%1$s</string>
+    <string name="toast_copy_background_failed">背景のコピーに失敗しました：%1$s</string>
+    <string name="toast_pack_parse_success">パックを解析しました</string>
+    <string name="toast_pack_too_large">パックが大きすぎるため読み込めません</string>
+    <string name="toast_pack_failed">パック処理に失敗しました：%1$s</string>
+    <string name="toast_skin_import_success">スキンをインポートしました</string>
+    <string name="toast_skin_import_failed">スキンのインポートに失敗しました：%1$s</string>
+    <string name="skin_builtin">内蔵スキン</string>
+    <string name="error_create_skin_dir">スキンフォルダーを作成できません</string>
+
+    <string name="loading_play">読み込み中...\n(譜面を解析し、音声をデコードしています)</string>
+    <string name="error_audio_too_large">音声ファイルが大きすぎてデコードできません。より小さい音声ファイルを試してください。</string>
+    <string name="error_chart_too_large">譜面ファイルが大きすぎて解析できません</string>
+    <string name="toast_load_oom">メモリ不足のため、この譜面を読み込めません。ファイルが大きすぎます。</string>
+    <string name="toast_load_failed">読み込みに失敗しました：%1$s</string>
+    <string name="error_create_replay_dir">リプレイフォルダーを作成できません</string>
+    <string name="error_create_temp_dir">一時フォルダーを作成できません</string>
+    <string name="error_replay_missing_json">リプレイファイルが破損しています：replay.json がありません</string>
+    <string name="error_replay_missing_chart">リプレイファイルが破損しています：譜面ファイルがありません</string>
+    <string name="error_replay_missing_audio">リプレイファイルが破損しています：音声ファイルがありません</string>
+    <string name="error_replay_missing_image">リプレイファイルが破損しています：画像ファイルがありません</string>
+    <string name="error_replay_json_not_found">リプレイファイルが破損しています：replay.json が見つかりません</string>
+
+    <string name="combo_replay">REPLAY</string>
+    <string name="combo_autoplay">AUTOPLAY</string>
+    <string name="combo_combo">COMBO</string>
+
+    <string name="result_accuracy">ACCURACY</string>
+    <string name="result_max_combo">MAX COMBO</string>
+    <string name="result_std_deviation">STD DEVIATION</string>
+    <string name="result_perfect">PERFECT</string>
+    <string name="result_good">GOOD</string>
+    <string name="result_bad">BAD</string>
+    <string name="result_miss">MISS</string>
+    <string name="result_early">EARLY</string>
+    <string name="result_late">LATE</string>
+</resources>

@@ -93,4 +93,9 @@
         <item name="android:textColorHint">@color/select_text_muted</item>
         <item name="android:textSize">14sp</item>
     </style>
+
+    <style name="SelectSwitch" parent="Widget.MaterialComponents.CompoundButton.Switch">
+        <item name="thumbTint">@color/select_switch_thumb</item>
+        <item name="trackTint">@color/select_switch_track</item>
+    </style>
 </resources>

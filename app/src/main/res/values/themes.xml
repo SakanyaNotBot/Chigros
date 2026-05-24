@@ -4,8 +4,10 @@
         <item name="android:windowFullscreen">true</item>
         <item name="colorPrimary">@color/primary_color</item>
         <item name="colorPrimaryVariant">@color/dark_primary_color</item>
-        <item name="colorSecondary">@color/accent_color</item>
-        <item name="colorSecondaryVariant">@color/accent_color</item>
+        <item name="colorSecondary">@color/select_accent</item>
+        <item name="colorSecondaryVariant">@color/select_accent</item>
+        <item name="colorControlActivated">@color/select_accent</item>
+        <item name="materialSwitchStyle">@style/SelectSwitch</item>
         <item name="colorOnPrimary">@color/text_icons</item>
         <item name="colorOnSecondary">@color/primary_text</item>
     </style>
@@ -14,8 +16,10 @@
         <item name="android:windowFullscreen">true</item>
         <item name="colorPrimary">@color/primary_color</item>
         <item name="colorPrimaryVariant">@color/dark_primary_color</item>
-        <item name="colorSecondary">@color/accent_color</item>
-        <item name="colorSecondaryVariant">@color/accent_color</item>
+        <item name="colorSecondary">@color/select_accent</item>
+        <item name="colorSecondaryVariant">@color/select_accent</item>
+        <item name="colorControlActivated">@color/select_accent</item>
+        <item name="materialSwitchStyle">@style/SelectSwitch</item>
         <item name="colorOnPrimary">@color/text_icons</item>
         <item name="colorOnSecondary">@color/primary_text</item>
     </style>

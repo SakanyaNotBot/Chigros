@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Chigros</string>
+
+    <string name="tab_chart">譜面</string>
+    <string name="tab_video">影片</string>
+    <string name="tab_audio">音訊</string>
+    <string name="tab_replay">回放</string>
+
+    <string name="title_chart_settings">譜面設定</string>
+    <string name="title_video_settings">影片設定</string>
+    <string name="title_audio_settings">音訊設定</string>
+    <string name="title_replay_settings">回放設定</string>
+
+    <string name="action_start">開始</string>
+    <string name="action_start_autoplay">開始自動演示</string>
+    <string name="action_import">匯入</string>
+    <string name="action_export">匯出</string>
+    <string name="action_delete">刪除</string>
+    <string name="action_cancel">取消</string>
+    <string name="action_export_selected">匯出 (%1$d)</string>
+    <string name="action_delete_selected">刪除 (%1$d)</string>
+
+    <string name="state_not_selected">未選擇</string>
+    <string name="chart_pack">譜面包</string>
+    <string name="action_pick_zip_pack">選擇譜面包</string>
+    <string name="section_pick_files">分別選擇檔案</string>
+    <string name="status_music">音樂：%1$s</string>
+    <string name="status_chart">譜面：%1$s</string>
+    <string name="status_background">背景：%1$s</string>
+    <string name="status_music_not_selected">音樂：未選擇</string>
+    <string name="status_chart_not_selected">譜面：未選擇</string>
+    <string name="status_background_not_selected">背景：未選擇</string>
+    <string name="action_pick_music">選擇音樂</string>
+    <string name="action_pick_chart">選擇譜面檔案</string>
+    <string name="action_pick_background">選擇背景圖片</string>
+    <string name="section_chart_info">譜面資料</string>
+    <string name="hint_song_name">曲名</string>
+    <string name="hint_difficulty">難度</string>
+    <string name="hint_chart_offset_ms">譜面偏移 (ms)</string>
+    <string name="pack_loaded">已載入：%1$s</string>
+    <string name="pack_item_music">音樂</string>
+    <string name="pack_item_chart">譜面</string>
+    <string name="pack_item_background">背景</string>
+
+    <string name="section_skin">皮膚</string>
+    <string name="hint_select_skin">選擇皮膚</string>
+    <string name="section_aspect_ratio">舞台長寬比</string>
+    <string name="hint_aspect_decimal">小數比例</string>
+    <string name="hint_preset">預設</string>
+    <string name="section_key_scale">按鍵大小</string>
+    <string name="section_scroll_speed">譜面速度</string>
+    <string name="option_follow_screen">跟隨螢幕比例</string>
+    <string name="option_manual_input">手動輸入</string>
+    <string name="setting_mirror_x">鏡像演示 (X 軸)</string>
+    <string name="setting_autoplay">自動演示</string>
+    <string name="setting_challenge_mode">挑戰模式</string>
+    <string name="setting_background_brightness">背景亮度</string>
+    <string name="setting_low_res_mode">低解像度模式</string>
+    <string name="setting_antialias">抗鋸齒</string>
+    <string name="setting_show_fps">顯示 FPS</string>
+    <string name="setting_show_debug">顯示除錯資料</string>
+    <string name="setting_multi_highlight">多押高亮提示</string>
+    <string name="setting_apfc_indicator">AP / FC 指示器</string>
+
+    <string name="section_music_volume">音樂音量</string>
+    <string name="section_sfx_volume">打擊音效音量</string>
+    <string name="section_music_speed">音樂速度</string>
+
+    <string name="setting_replay_recording">啟用回放記錄</string>
+    <string name="section_replay_manage">回放管理</string>
+    <string name="replay_empty">沒有回放記錄</string>
+    <string name="dialog_confirm_delete">確認刪除</string>
+    <string name="dialog_delete_replay_message">要刪除已選擇的 %1$d 個回放嗎？</string>
+    <string name="toast_replay_export_success">已匯出 %1$d 個回放到 Download/Chigros/</string>
+    <string name="toast_replay_export_failed">匯出失敗：%1$s</string>
+    <string name="toast_replay_data_corrupt">回放資料已損毀</string>
+    <string name="toast_replay_resources_incomplete">回放資源不完整</string>
+    <string name="toast_replay_import_success">回放已匯入</string>
+    <string name="toast_replay_import_failed">匯入回放失敗：%1$s</string>
+    <string name="toast_replay_load_failed">載入回放失敗：%1$s</string>
+    <string name="toast_replay_cache_missing">回放快取不存在</string>
+    <string name="toast_replay_already_saved">回放已存在</string>
+    <string name="toast_replay_saved">回放已儲存</string>
+    <string name="toast_replay_save_failed">儲存回放失敗：%1$s</string>
+
+    <string name="toast_pick_required_files">請先選擇音樂、譜面及背景</string>
+    <string name="toast_fill_song_info">請在譜面分頁填寫曲名及難度</string>
+    <string name="toast_copy_music_failed">複製音樂失敗：%1$s</string>
+    <string name="toast_copy_chart_failed">複製譜面失敗：%1$s</string>
+    <string name="toast_copy_background_failed">複製背景失敗：%1$s</string>
+    <string name="toast_pack_parse_success">封包解析完成</string>
+    <string name="toast_pack_too_large">封包太大，無法載入</string>
+    <string name="toast_pack_failed">處理封包失敗：%1$s</string>
+    <string name="toast_skin_import_success">皮膚已匯入</string>
+    <string name="toast_skin_import_failed">匯入皮膚失敗：%1$s</string>
+    <string name="skin_builtin">內置皮膚</string>
+    <string name="error_create_skin_dir">無法建立皮膚目錄</string>
+
+    <string name="loading_play">載入中...\n(正在解析譜面並解碼音訊)</string>
+    <string name="error_audio_too_large">音訊檔案太大，無法解碼。請嘗試較小的音訊檔案。</string>
+    <string name="error_chart_too_large">譜面檔案太大，無法解析</string>
+    <string name="toast_load_oom">記憶體不足，無法載入此譜面。檔案太大。</string>
+    <string name="toast_load_failed">載入失敗：%1$s</string>
+    <string name="error_create_replay_dir">無法建立回放目錄</string>
+    <string name="error_create_temp_dir">無法建立暫存目錄</string>
+    <string name="error_replay_missing_json">回放檔案損毀：缺少 replay.json</string>
+    <string name="error_replay_missing_chart">回放檔案損毀：缺少譜面檔案</string>
+    <string name="error_replay_missing_audio">回放檔案損毀：缺少音訊檔案</string>
+    <string name="error_replay_missing_image">回放檔案損毀：缺少圖片檔案</string>
+    <string name="error_replay_json_not_found">回放檔案損毀：找不到 replay.json</string>
+
+    <string name="combo_replay">REPLAY</string>
+    <string name="combo_autoplay">AUTOPLAY</string>
+    <string name="combo_combo">COMBO</string>
+
+    <string name="result_accuracy">ACCURACY</string>
+    <string name="result_max_combo">MAX COMBO</string>
+    <string name="result_std_deviation">STD DEVIATION</string>
+    <string name="result_perfect">PERFECT</string>
+    <string name="result_good">GOOD</string>
+    <string name="result_bad">BAD</string>
+    <string name="result_miss">MISS</string>
+    <string name="result_early">EARLY</string>
+    <string name="result_late">LATE</string>
+</resources>

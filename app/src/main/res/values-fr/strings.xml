@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Chigros</string>
+
+    <string name="tab_chart">Partition</string>
+    <string name="tab_video">Vidéo</string>
+    <string name="tab_audio">Audio</string>
+    <string name="tab_replay">Replay</string>
+
+    <string name="title_chart_settings">Paramètres de partition</string>
+    <string name="title_video_settings">Paramètres vidéo</string>
+    <string name="title_audio_settings">Paramètres audio</string>
+    <string name="title_replay_settings">Paramètres de replay</string>
+
+    <string name="action_start">Démarrer</string>
+    <string name="action_start_autoplay">Démarrer auto</string>
+    <string name="action_import">Importer</string>
+    <string name="action_export">Exporter</string>
+    <string name="action_delete">Supprimer</string>
+    <string name="action_cancel">Annuler</string>
+    <string name="action_export_selected">Exporter (%1$d)</string>
+    <string name="action_delete_selected">Supprimer (%1$d)</string>
+
+    <string name="state_not_selected">Non sélectionné</string>
+    <string name="chart_pack">Pack de partitions</string>
+    <string name="action_pick_zip_pack">Choisir un pack de partitions</string>
+    <string name="section_pick_files">Choisir les fichiers séparément</string>
+    <string name="status_music">Musique : %1$s</string>
+    <string name="status_chart">Partition : %1$s</string>
+    <string name="status_background">Arrière-plan : %1$s</string>
+    <string name="status_music_not_selected">Musique : non sélectionnée</string>
+    <string name="status_chart_not_selected">Partition : non sélectionnée</string>
+    <string name="status_background_not_selected">Arrière-plan : non sélectionné</string>
+    <string name="action_pick_music">Choisir la musique</string>
+    <string name="action_pick_chart">Choisir le fichier de partition</string>
+    <string name="action_pick_background">Choisir l’image d’arrière-plan</string>
+    <string name="section_chart_info">Infos de partition</string>
+    <string name="hint_song_name">Nom du morceau</string>
+    <string name="hint_difficulty">Difficulté</string>
+    <string name="hint_chart_offset_ms">Décalage de partition (ms)</string>
+    <string name="pack_loaded">Chargé : %1$s</string>
+    <string name="pack_item_music">Musique</string>
+    <string name="pack_item_chart">Partition</string>
+    <string name="pack_item_background">Arrière-plan</string>
+
+    <string name="section_skin">Skin</string>
+    <string name="hint_select_skin">Choisir un skin</string>
+    <string name="section_aspect_ratio">Format de scène</string>
+    <string name="hint_aspect_decimal">Ratio décimal</string>
+    <string name="hint_preset">Préréglage</string>
+    <string name="section_key_scale">Taille des notes</string>
+    <string name="section_scroll_speed">Vitesse des notes</string>
+    <string name="option_follow_screen">Suivre le ratio de l’écran</string>
+    <string name="option_manual_input">Saisie manuelle</string>
+    <string name="setting_mirror_x">Démo miroir (axe X)</string>
+    <string name="setting_autoplay">Lecture auto</string>
+    <string name="setting_challenge_mode">Mode défi</string>
+    <string name="setting_background_brightness">Assombrissement du fond</string>
+    <string name="setting_low_res_mode">Mode basse résolution</string>
+    <string name="setting_antialias">Anticrénelage</string>
+    <string name="setting_show_fps">Afficher les FPS</string>
+    <string name="setting_show_debug">Afficher les infos de débogage</string>
+    <string name="setting_multi_highlight">Mettre en évidence les notes simultanées</string>
+    <string name="setting_apfc_indicator">Indicateur AP / FC</string>
+
+    <string name="section_music_volume">Volume de la musique</string>
+    <string name="section_sfx_volume">Volume des sons de frappe</string>
+    <string name="section_music_speed">Vitesse de la musique</string>
+
+    <string name="setting_replay_recording">Activer l’enregistrement des replays</string>
+    <string name="section_replay_manage">Gestion des replays</string>
+    <string name="replay_empty">Aucun replay enregistré</string>
+    <string name="dialog_confirm_delete">Confirmer la suppression</string>
+    <string name="dialog_delete_replay_message">Supprimer les %1$d replays sélectionnés ?</string>
+    <string name="toast_replay_export_success">%1$d replays exportés vers Download/Chigros/</string>
+    <string name="toast_replay_export_failed">Échec de l’export : %1$s</string>
+    <string name="toast_replay_data_corrupt">Les données du replay sont corrompues</string>
+    <string name="toast_replay_resources_incomplete">Les ressources du replay sont incomplètes</string>
+    <string name="toast_replay_import_success">Replay importé</string>
+    <string name="toast_replay_import_failed">Échec de l’import du replay : %1$s</string>
+    <string name="toast_replay_load_failed">Échec du chargement du replay : %1$s</string>
+    <string name="toast_replay_cache_missing">Le cache du replay n’existe pas</string>
+    <string name="toast_replay_already_saved">Replay déjà enregistré</string>
+    <string name="toast_replay_saved">Replay enregistré</string>
+    <string name="toast_replay_save_failed">Échec de l’enregistrement du replay : %1$s</string>
+
+    <string name="toast_pick_required_files">Choisissez d’abord la musique, la partition et l’arrière-plan</string>
+    <string name="toast_fill_song_info">Renseignez le nom du morceau et la difficulté dans l’onglet Partition</string>
+    <string name="toast_copy_music_failed">Échec de la copie de la musique : %1$s</string>
+    <string name="toast_copy_chart_failed">Échec de la copie de la partition : %1$s</string>
+    <string name="toast_copy_background_failed">Échec de la copie de l’arrière-plan : %1$s</string>
+    <string name="toast_pack_parse_success">Pack analysé</string>
+    <string name="toast_pack_too_large">Le pack est trop volumineux pour être chargé</string>
+    <string name="toast_pack_failed">Échec du traitement du pack : %1$s</string>
+    <string name="toast_skin_import_success">Skin importé</string>
+    <string name="toast_skin_import_failed">Échec de l’import du skin : %1$s</string>
+    <string name="skin_builtin">Skin intégré</string>
+    <string name="error_create_skin_dir">Impossible de créer le dossier des skins</string>
+
+    <string name="loading_play">Chargement...\n(Analyse de la partition et décodage audio)</string>
+    <string name="error_audio_too_large">Le fichier audio est trop volumineux pour être décodé. Essayez un fichier audio plus petit.</string>
+    <string name="error_chart_too_large">Le fichier de partition est trop volumineux pour être analysé</string>
+    <string name="toast_load_oom">Mémoire insuffisante pour charger cette partition. Le fichier est trop volumineux.</string>
+    <string name="toast_load_failed">Échec du chargement : %1$s</string>
+    <string name="error_create_replay_dir">Impossible de créer le dossier des replays</string>
+    <string name="error_create_temp_dir">Impossible de créer le dossier temporaire</string>
+    <string name="error_replay_missing_json">Fichier de replay corrompu : replay.json manquant</string>
+    <string name="error_replay_missing_chart">Fichier de replay corrompu : fichier de partition manquant</string>
+    <string name="error_replay_missing_audio">Fichier de replay corrompu : fichier audio manquant</string>
+    <string name="error_replay_missing_image">Fichier de replay corrompu : fichier image manquant</string>
+    <string name="error_replay_json_not_found">Fichier de replay corrompu : replay.json introuvable</string>
+
+    <string name="combo_replay">REPLAY</string>
+    <string name="combo_autoplay">AUTOPLAY</string>
+    <string name="combo_combo">COMBO</string>
+
+    <string name="result_accuracy">ACCURACY</string>
+    <string name="result_max_combo">MAX COMBO</string>
+    <string name="result_std_deviation">STD DEVIATION</string>
+    <string name="result_perfect">PERFECT</string>
+    <string name="result_good">GOOD</string>
+    <string name="result_bad">BAD</string>
+    <string name="result_miss">MISS</string>
+    <string name="result_early">EARLY</string>
+    <string name="result_late">LATE</string>
+</resources>

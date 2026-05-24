@@ -44,8 +44,21 @@ public class SelectReplayFragment extends Fragment {
     private MaterialButton btnDelete;
     private LinearLayout replayListContainer;
 
+    private enum SelectionAction {
+        NONE,
+        EXPORT,
+        DELETE
+    }
+
+    private static final int COLOR_OUTLINE = 0xFF2F3B4A;
+    private static final int COLOR_OUTLINE_SELECTED = 0xFF56D6C9;
+    private static final int COLOR_SURFACE = 0xF0232B38;
+    private static final int COLOR_SURFACE_SELECTED = 0xF02A3C48;
+
     private boolean selectionMode = false;
+    private SelectionAction selectionAction = SelectionAction.NONE;
     private final Set<String> selectedUuids = new HashSet<>();
+    private int replayCount = 0;
 
     @Nullable
     @Override
@@ -70,53 +83,21 @@ public class SelectReplayFragment extends Fragment {
         }
 
         if (btnImport != null) {
-            btnImport.setOnClickListener(v -> host().launchPickReplayZip());
+            btnImport.setOnClickListener(v -> {
+                if (selectionMode) {
+                    exitSelectionMode();
+                } else {
+                    host().launchPickReplayZip();
+                }
+            });
         }
 
         if (btnExport != null) {
-            btnExport.setOnClickListener(v -> {
-                if (!selectionMode) {
-                    enterSelectionMode();
-                } else {
-                    if (selectedUuids.isEmpty()) {
-                        exitSelectionMode();
-                        return;
-                    }
-                    try {
-                        int count = ReplayManager.exportReplaysToCgrp(requireContext(), new ArrayList<>(selectedUuids));
-                        Toast.makeText(requireContext(), getString(R.string.toast_replay_export_success, count), Toast.LENGTH_SHORT).show();
-                    } catch (IOException e) {
-                        Toast.makeText(requireContext(), getString(R.string.toast_replay_export_failed, e.getMessage()), Toast.LENGTH_SHORT).show();
-                    }
-                    exitSelectionMode();
-                }
-            });
+            btnExport.setOnClickListener(v -> handleExportClick());
         }
 
         if (btnDelete != null) {
-            btnDelete.setOnClickListener(v -> {
-                if (!selectionMode) {
-                    enterSelectionMode();
-                } else {
-                    if (selectedUuids.isEmpty()) {
-                        exitSelectionMode();
-                        return;
-                    }
-                    new AlertDialog.Builder(requireContext())
-                            .setTitle(R.string.dialog_confirm_delete)
-                            .setMessage(getString(R.string.dialog_delete_replay_message, selectedUuids.size()))
-                            .setPositiveButton(R.string.action_delete, (dialog, which) -> {
-                                for (String uuid : new ArrayList<>(selectedUuids)) {
-                                    ReplayManager.deleteReplay(requireContext(), uuid);
-                                }
-                                selectedUuids.clear();
-                                exitSelectionMode();
-                                refreshList();
-                            })
-                            .setNegativeButton(R.string.action_cancel, null)
-                            .show();
-                }
-            });
+            btnDelete.setOnClickListener(v -> handleDeleteClick());
         }
 
         refreshList();
@@ -128,16 +109,61 @@ public class SelectReplayFragment extends Fragment {
         refreshList();
     }
 
-    private void enterSelectionMode() {
+    private void enterSelectionMode(SelectionAction action) {
+        enterSelectionMode(action, null);
+    }
+
+    private void enterSelectionMode(SelectionAction action, @Nullable String initialUuid) {
         selectionMode = true;
+        selectionAction = action;
         selectedUuids.clear();
+        if (initialUuid != null) {
+            selectedUuids.add(initialUuid);
+        }
         refreshList();
     }
 
     private void exitSelectionMode() {
         selectionMode = false;
+        selectionAction = SelectionAction.NONE;
         selectedUuids.clear();
         refreshList();
+    }
+
+    private void handleExportClick() {
+        if (!selectionMode) {
+            enterSelectionMode(SelectionAction.EXPORT);
+            return;
+        }
+        if (selectedUuids.isEmpty()) return;
+
+        try {
+            int count = ReplayManager.exportReplaysToCgrp(requireContext(), new ArrayList<>(selectedUuids));
+            Toast.makeText(requireContext(), getString(R.string.toast_replay_export_success, count), Toast.LENGTH_SHORT).show();
+        } catch (IOException e) {
+            Toast.makeText(requireContext(), getString(R.string.toast_replay_export_failed, e.getMessage()), Toast.LENGTH_SHORT).show();
+        }
+        exitSelectionMode();
+    }
+
+    private void handleDeleteClick() {
+        if (!selectionMode) {
+            enterSelectionMode(SelectionAction.DELETE);
+            return;
+        }
+        if (selectedUuids.isEmpty()) return;
+
+        new AlertDialog.Builder(requireContext())
+                .setTitle(R.string.dialog_confirm_delete)
+                .setMessage(getString(R.string.dialog_delete_replay_message, selectedUuids.size()))
+                .setPositiveButton(R.string.action_delete, (dialog, which) -> {
+                    for (String uuid : new ArrayList<>(selectedUuids)) {
+                        ReplayManager.deleteReplay(requireContext(), uuid);
+                    }
+                    exitSelectionMode();
+                })
+                .setNegativeButton(R.string.action_cancel, null)
+                .show();
     }
 
     public void refreshFromActivity() {
@@ -152,6 +178,8 @@ public class SelectReplayFragment extends Fragment {
         replayListContainer.removeAllViews();
 
         List<ReplayManager.ReplayInfo> replays = ReplayManager.getReplayList(requireContext());
+        replayCount = replays.size();
+        updateActionButtons();
         if (replays.isEmpty()) {
             TextView empty = new TextView(requireContext());
             empty.setText(R.string.replay_empty);
@@ -168,6 +196,29 @@ public class SelectReplayFragment extends Fragment {
         }
     }
 
+    private void updateActionButtons() {
+        int selectedCount = selectedUuids.size();
+        boolean hasReplays = replayCount > 0;
+
+        if (btnImport != null) {
+            btnImport.setText(selectionMode ? R.string.action_cancel : R.string.action_import);
+        }
+        if (btnExport != null) {
+            btnExport.setText(selectionMode
+                    ? getString(R.string.action_export_selected, selectedCount)
+                    : getString(R.string.action_export));
+            btnExport.setEnabled(hasReplays && (!selectionMode
+                    || (selectedCount > 0 && selectionAction != SelectionAction.DELETE)));
+        }
+        if (btnDelete != null) {
+            btnDelete.setText(selectionMode
+                    ? getString(R.string.action_delete_selected, selectedCount)
+                    : getString(R.string.action_delete));
+            btnDelete.setEnabled(hasReplays && (!selectionMode
+                    || (selectedCount > 0 && selectionAction != SelectionAction.EXPORT)));
+        }
+    }
+
     private View buildReplayItem(ReplayManager.ReplayInfo info) {
         MaterialCardView card = new MaterialCardView(requireContext());
         LinearLayout.LayoutParams cardLp = new LinearLayout.LayoutParams(
@@ -177,9 +228,10 @@ public class SelectReplayFragment extends Fragment {
         card.setLayoutParams(cardLp);
         card.setCardElevation(0);
         card.setStrokeWidth(dp(1));
-        card.setStrokeColor(0xFF2F3B4A);
+        boolean selected = selectedUuids.contains(info.uuid);
+        card.setStrokeColor(selected ? COLOR_OUTLINE_SELECTED : COLOR_OUTLINE);
         card.setRadius(dp(8));
-        card.setCardBackgroundColor(0xF0232B38);
+        card.setCardBackgroundColor(selected ? COLOR_SURFACE_SELECTED : COLOR_SURFACE);
         card.setClickable(true);
         card.setFocusable(true);
 
@@ -191,7 +243,7 @@ public class SelectReplayFragment extends Fragment {
         // Checkbox (selection mode only)
         CheckBox checkBox = new CheckBox(requireContext());
         checkBox.setVisibility(selectionMode ? View.VISIBLE : View.GONE);
-        checkBox.setChecked(selectedUuids.contains(info.uuid));
+        checkBox.setChecked(selected);
         LinearLayout.LayoutParams cbLp = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
         cbLp.gravity = android.view.Gravity.CENTER_VERTICAL;
@@ -200,6 +252,7 @@ public class SelectReplayFragment extends Fragment {
         checkBox.setOnCheckedChangeListener((buttonView, isChecked) -> {
             if (isChecked) selectedUuids.add(info.uuid);
             else selectedUuids.remove(info.uuid);
+            refreshList();
         });
 
         // Info text
@@ -235,7 +288,12 @@ public class SelectReplayFragment extends Fragment {
         favLp.gravity = android.view.Gravity.CENTER_VERTICAL;
         btnFav.setLayoutParams(favLp);
         btnFav.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        btnFav.setVisibility(selectionMode ? View.GONE : View.VISIBLE);
         btnFav.setOnClickListener(v -> {
+            if (selectionMode) {
+                toggleReplaySelection(info.uuid);
+                return;
+            }
             boolean newFav = !info.favorite;
             ReplayManager.setFavorite(requireContext(), info.uuid, newFav);
             info.favorite = newFav;
@@ -251,7 +309,14 @@ public class SelectReplayFragment extends Fragment {
         playLp.gravity = android.view.Gravity.CENTER_VERTICAL;
         btnPlay.setLayoutParams(playLp);
         btnPlay.setScaleType(ImageView.ScaleType.FIT_CENTER);
-        btnPlay.setOnClickListener(v -> playReplay(info.uuid));
+        btnPlay.setVisibility(selectionMode ? View.GONE : View.VISIBLE);
+        btnPlay.setOnClickListener(v -> {
+            if (selectionMode) {
+                toggleReplaySelection(info.uuid);
+            } else {
+                playReplay(info.uuid);
+            }
+        });
 
         row.addView(checkBox);
         row.addView(infoCol);
@@ -262,20 +327,29 @@ public class SelectReplayFragment extends Fragment {
         // Click / long press
         card.setOnClickListener(v -> {
             if (selectionMode) {
-                checkBox.setChecked(!checkBox.isChecked());
+                toggleReplaySelection(info.uuid);
+            } else {
+                playReplay(info.uuid);
             }
         });
         card.setOnLongClickListener(v -> {
             if (!selectionMode) {
-                enterSelectionMode();
-                selectedUuids.add(info.uuid);
-                refreshList();
+                enterSelectionMode(SelectionAction.NONE, info.uuid);
                 return true;
             }
             return false;
         });
 
         return card;
+    }
+
+    private void toggleReplaySelection(String uuid) {
+        if (selectedUuids.contains(uuid)) {
+            selectedUuids.remove(uuid);
+        } else {
+            selectedUuids.add(uuid);
+        }
+        refreshList();
     }
 
     private Bitmap loadAssetBitmap(String path) {

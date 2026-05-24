@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Chigros</string>
+
+    <string name="tab_chart">채보</string>
+    <string name="tab_video">비디오</string>
+    <string name="tab_audio">오디오</string>
+    <string name="tab_replay">리플레이</string>
+
+    <string name="title_chart_settings">채보 설정</string>
+    <string name="title_video_settings">비디오 설정</string>
+    <string name="title_audio_settings">오디오 설정</string>
+    <string name="title_replay_settings">리플레이 설정</string>
+
+    <string name="action_start">시작</string>
+    <string name="action_start_autoplay">자동 재생 시작</string>
+    <string name="action_import">가져오기</string>
+    <string name="action_export">내보내기</string>
+    <string name="action_delete">삭제</string>
+    <string name="action_cancel">취소</string>
+    <string name="action_export_selected">내보내기 (%1$d)</string>
+    <string name="action_delete_selected">삭제 (%1$d)</string>
+
+    <string name="state_not_selected">선택되지 않음</string>
+    <string name="chart_pack">채보 팩</string>
+    <string name="action_pick_zip_pack">채보 팩 선택</string>
+    <string name="section_pick_files">파일을 개별 선택</string>
+    <string name="status_music">음악: %1$s</string>
+    <string name="status_chart">채보: %1$s</string>
+    <string name="status_background">배경: %1$s</string>
+    <string name="status_music_not_selected">음악: 선택되지 않음</string>
+    <string name="status_chart_not_selected">채보: 선택되지 않음</string>
+    <string name="status_background_not_selected">배경: 선택되지 않음</string>
+    <string name="action_pick_music">음악 선택</string>
+    <string name="action_pick_chart">채보 파일 선택</string>
+    <string name="action_pick_background">배경 이미지 선택</string>
+    <string name="section_chart_info">채보 정보</string>
+    <string name="hint_song_name">곡명</string>
+    <string name="hint_difficulty">난이도</string>
+    <string name="hint_chart_offset_ms">채보 오프셋 (ms)</string>
+    <string name="pack_loaded">불러옴: %1$s</string>
+    <string name="pack_item_music">음악</string>
+    <string name="pack_item_chart">채보</string>
+    <string name="pack_item_background">배경</string>
+
+    <string name="section_skin">스킨</string>
+    <string name="hint_select_skin">스킨 선택</string>
+    <string name="section_aspect_ratio">스테이지 화면비</string>
+    <string name="hint_aspect_decimal">소수 화면비</string>
+    <string name="hint_preset">프리셋</string>
+    <string name="section_key_scale">노트 크기</string>
+    <string name="section_scroll_speed">노트 속도</string>
+    <string name="option_follow_screen">화면 비율 따르기</string>
+    <string name="option_manual_input">직접 입력</string>
+    <string name="setting_mirror_x">미러 데모 (X축)</string>
+    <string name="setting_autoplay">자동 재생</string>
+    <string name="setting_challenge_mode">챌린지 모드</string>
+    <string name="setting_background_brightness">배경 어둡게</string>
+    <string name="setting_low_res_mode">저해상도 모드</string>
+    <string name="setting_antialias">안티앨리어싱</string>
+    <string name="setting_show_fps">FPS 표시</string>
+    <string name="setting_show_debug">디버그 정보 표시</string>
+    <string name="setting_multi_highlight">동시 노트 강조</string>
+    <string name="setting_apfc_indicator">AP / FC 표시기</string>
+
+    <string name="section_music_volume">음악 볼륨</string>
+    <string name="section_sfx_volume">타격음 볼륨</string>
+    <string name="section_music_speed">음악 속도</string>
+
+    <string name="setting_replay_recording">리플레이 기록 활성화</string>
+    <string name="section_replay_manage">리플레이 관리</string>
+    <string name="replay_empty">리플레이 기록이 없습니다</string>
+    <string name="dialog_confirm_delete">삭제 확인</string>
+    <string name="dialog_delete_replay_message">선택한 리플레이 %1$d개를 삭제할까요?</string>
+    <string name="toast_replay_export_success">리플레이 %1$d개를 Download/Chigros/로 내보냈습니다</string>
+    <string name="toast_replay_export_failed">내보내기 실패: %1$s</string>
+    <string name="toast_replay_data_corrupt">리플레이 데이터가 손상되었습니다</string>
+    <string name="toast_replay_resources_incomplete">리플레이 리소스가 불완전합니다</string>
+    <string name="toast_replay_import_success">리플레이를 가져왔습니다</string>
+    <string name="toast_replay_import_failed">리플레이 가져오기 실패: %1$s</string>
+    <string name="toast_replay_load_failed">리플레이 불러오기 실패: %1$s</string>
+    <string name="toast_replay_cache_missing">리플레이 캐시가 없습니다</string>
+    <string name="toast_replay_already_saved">리플레이가 이미 저장되어 있습니다</string>
+    <string name="toast_replay_saved">리플레이를 저장했습니다</string>
+    <string name="toast_replay_save_failed">리플레이 저장 실패: %1$s</string>
+
+    <string name="toast_pick_required_files">먼저 음악, 채보, 배경을 선택하세요</string>
+    <string name="toast_fill_song_info">채보 탭에서 곡명과 난이도를 입력하세요</string>
+    <string name="toast_copy_music_failed">음악 복사 실패: %1$s</string>
+    <string name="toast_copy_chart_failed">채보 복사 실패: %1$s</string>
+    <string name="toast_copy_background_failed">배경 복사 실패: %1$s</string>
+    <string name="toast_pack_parse_success">패키지 분석 완료</string>
+    <string name="toast_pack_too_large">패키지가 너무 커서 불러올 수 없습니다</string>
+    <string name="toast_pack_failed">패키지 처리 실패: %1$s</string>
+    <string name="toast_skin_import_success">스킨을 가져왔습니다</string>
+    <string name="toast_skin_import_failed">스킨 가져오기 실패: %1$s</string>
+    <string name="skin_builtin">내장 스킨</string>
+    <string name="error_create_skin_dir">스킨 디렉터리를 만들 수 없습니다</string>
+
+    <string name="loading_play">불러오는 중...\n(채보 분석 및 오디오 디코딩 중)</string>
+    <string name="error_audio_too_large">오디오 파일이 너무 커서 디코딩할 수 없습니다. 더 작은 오디오 파일을 사용해 보세요.</string>
+    <string name="error_chart_too_large">채보 파일이 너무 커서 분석할 수 없습니다</string>
+    <string name="toast_load_oom">메모리가 부족해 이 채보를 불러올 수 없습니다. 파일이 너무 큽니다.</string>
+    <string name="toast_load_failed">불러오기 실패: %1$s</string>
+    <string name="error_create_replay_dir">리플레이 디렉터리를 만들 수 없습니다</string>
+    <string name="error_create_temp_dir">임시 디렉터리를 만들 수 없습니다</string>
+    <string name="error_replay_missing_json">리플레이 파일이 손상되었습니다: replay.json 누락</string>
+    <string name="error_replay_missing_chart">리플레이 파일이 손상되었습니다: 채보 파일 누락</string>
+    <string name="error_replay_missing_audio">리플레이 파일이 손상되었습니다: 오디오 파일 누락</string>
+    <string name="error_replay_missing_image">리플레이 파일이 손상되었습니다: 이미지 파일 누락</string>
+    <string name="error_replay_json_not_found">리플레이 파일이 손상되었습니다: replay.json을 찾을 수 없음</string>
+
+    <string name="combo_replay">REPLAY</string>
+    <string name="combo_autoplay">AUTOPLAY</string>
+    <string name="combo_combo">COMBO</string>
+
+    <string name="result_accuracy">ACCURACY</string>
+    <string name="result_max_combo">MAX COMBO</string>
+    <string name="result_std_deviation">STD DEVIATION</string>
+    <string name="result_perfect">PERFECT</string>
+    <string name="result_good">GOOD</string>
+    <string name="result_bad">BAD</string>
+    <string name="result_miss">MISS</string>
+    <string name="result_early">EARLY</string>
+    <string name="result_late">LATE</string>
+</resources>
