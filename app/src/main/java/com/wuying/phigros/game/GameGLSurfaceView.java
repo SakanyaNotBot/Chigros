@@ -17,8 +17,6 @@ public class GameGLSurfaceView extends GLSurfaceView {
 
     private GestureDetector gestureDetector;
     private GameRenderer renderer;
-    private boolean unlimitedFrameRate = false;
-
     public GameGLSurfaceView(Context context) {
         super(context);
         setEGLContextClientVersion(2);
@@ -30,7 +28,6 @@ public class GameGLSurfaceView extends GLSurfaceView {
 
     /** Disable VSync for maximum frame rate. */
     public void enableUnlimitedFrameRate() {
-        unlimitedFrameRate = true;
         setEGLContextFactory(new EGLContextFactory() {
             @Override
             public EGLContext createContext(EGL10 egl, EGLDisplay display, EGLConfig config) {
@@ -135,21 +132,24 @@ public class GameGLSurfaceView extends GLSurfaceView {
     private static final class MsaaConfigChooser implements GLSurfaceView.EGLConfigChooser {
         @Override
         public EGLConfig chooseConfig(EGL10 egl, EGLDisplay display) {
-            int[] attribs = new int[]{
-                    EGL10.EGL_RED_SIZE, 8,
-                    EGL10.EGL_GREEN_SIZE, 8,
-                    EGL10.EGL_BLUE_SIZE, 8,
-                    EGL10.EGL_ALPHA_SIZE, 8,
-                    EGL10.EGL_DEPTH_SIZE, 16,
-                    EGL10.EGL_RENDERABLE_TYPE, 4,
-                    EGL10.EGL_SAMPLE_BUFFERS, 1,
-                    EGL10.EGL_SAMPLES, 4,
-                    EGL10.EGL_NONE
-            };
             EGLConfig[] configs = new EGLConfig[1];
             int[] num = new int[1];
-            if (egl.eglChooseConfig(display, attribs, configs, 1, num) && num[0] > 0) {
-                return configs[0];
+            int[] samples = new int[]{8, 4, 2};
+            for (int sampleCount : samples) {
+                int[] attribs = new int[]{
+                        EGL10.EGL_RED_SIZE, 8,
+                        EGL10.EGL_GREEN_SIZE, 8,
+                        EGL10.EGL_BLUE_SIZE, 8,
+                        EGL10.EGL_ALPHA_SIZE, 8,
+                        EGL10.EGL_DEPTH_SIZE, 16,
+                        EGL10.EGL_RENDERABLE_TYPE, 4,
+                        EGL10.EGL_SAMPLE_BUFFERS, 1,
+                        EGL10.EGL_SAMPLES, sampleCount,
+                        EGL10.EGL_NONE
+                };
+                if (egl.eglChooseConfig(display, attribs, configs, 1, num) && num[0] > 0) {
+                    return configs[0];
+                }
             }
             int[] fallback = new int[]{
                     EGL10.EGL_RED_SIZE, 8,

@@ -31,6 +31,10 @@ public class SelectVideoFragment extends Fragment {
     private static final float[] PRESET_VALUES = new float[]{
             0f, 1.25f, 1.3333333f, 1.4285714f, 1.4615385f, 1.6f, 1.6666667f, 1.6923077f, 1.7777778f
     };
+    private static final float BG_BRIGHTNESS_MIN = 0.2f;
+    private static final float BG_BRIGHTNESS_MAX = 0.7f;
+    private static final float BG_DIM_MIN = 1f - BG_BRIGHTNESS_MAX;
+    private static final float BG_DIM_MAX = 1f - BG_BRIGHTNESS_MIN;
 
     private TextInputEditText etAspect;
     private MaterialAutoCompleteTextView actPreset;
@@ -198,9 +202,10 @@ public class SelectVideoFragment extends Fragment {
         if (swApfc != null) swApfc.setOnCheckedChangeListener((buttonView, isChecked) -> host().setApfcIndicator(isChecked));
 
         if (sliderBgDim != null) {
-            sliderBgDim.setValueFrom(0f);
-            sliderBgDim.setValueTo(1f);
-            sliderBgDim.addOnChangeListener((slider, value, fromUser) -> host().setBackgroundDim(1f - clamp(value, 0f, 1f)));
+            sliderBgDim.setValueFrom(BG_BRIGHTNESS_MIN);
+            sliderBgDim.setValueTo(BG_BRIGHTNESS_MAX);
+            sliderBgDim.addOnChangeListener((slider, value, fromUser) ->
+                    host().setBackgroundDim(1f - clamp(value, BG_BRIGHTNESS_MIN, BG_BRIGHTNESS_MAX)));
         }
 
         refreshFromActivity();
@@ -281,7 +286,11 @@ public class SelectVideoFragment extends Fragment {
         if (swMirrorX != null) swMirrorX.setChecked(a.isMirrorX());
         if (swAutoplay != null) swAutoplay.setChecked(a.isAutoplay());
         if (swChallenge != null) swChallenge.setChecked(a.isChallengeMode());
-        if (sliderBgDim != null) sliderBgDim.setValue(1f - clamp(a.getBackgroundDim(), 0f, 1f));
+        if (sliderBgDim != null) {
+            float dim = clamp(a.getBackgroundDim(), BG_DIM_MIN, BG_DIM_MAX);
+            float brightness = clamp(1f - dim, BG_BRIGHTNESS_MIN, BG_BRIGHTNESS_MAX);
+            sliderBgDim.setValue(brightness);
+        }
         if (swLowRes != null) swLowRes.setChecked(a.isLowResMode());
         if (swAa != null) swAa.setChecked(a.isAntialias());
         if (swShowFps != null) swShowFps.setChecked(a.isShowFps());

@@ -560,6 +560,10 @@ public final class EventUtils {
     }
 
     public static float[] getColorVal(double t, List<ColorEvent> events, EventCursor cur) {
+        return getColorValInto(t, events, cur, null);
+    }
+
+    public static float[] getColorValInto(double t, List<ColorEvent> events, EventCursor cur, float[] out) {
         if (events == null || events.isEmpty()) return null;
         final int n = events.size();
         int ci = cur.index;
@@ -578,10 +582,18 @@ public final class EventUtils {
         }
         cur.index = ci;
 
-        float[] last = null;
+        boolean hasLast = false;
+        float lastR = 0f;
+        float lastG = 0f;
+        float lastB = 0f;
         if (ci > 0) {
             ColorEvent prev = events.get(ci - 1);
-            if (prev != null) last = new float[]{prev.endR, prev.endG, prev.endB};
+            if (prev != null) {
+                lastR = prev.endR;
+                lastG = prev.endG;
+                lastB = prev.endB;
+                hasLast = true;
+            }
         }
         for (int i = ci; i < n; i++) {
             ColorEvent e = events.get(i);
@@ -591,17 +603,30 @@ public final class EventUtils {
             double ed = e.endTime; if (!Double.isFinite(ed)) ed = st;
             if (t <= ed) {
                 double dur = ed - st;
-                if (dur <= 1e-9) return new float[]{e.endR, e.endG, e.endB};
-                double p = (t - st) / dur;
-                return new float[]{
-                    (float) lerp(e.startR, e.endR, p),
-                    (float) lerp(e.startG, e.endG, p),
-                    (float) lerp(e.startB, e.endB, p)
-                };
+                if (out == null || out.length < 3) out = new float[3];
+                if (dur <= 1e-9) {
+                    out[0] = e.endR;
+                    out[1] = e.endG;
+                    out[2] = e.endB;
+                } else {
+                    double p = (t - st) / dur;
+                    out[0] = (float) lerp(e.startR, e.endR, p);
+                    out[1] = (float) lerp(e.startG, e.endG, p);
+                    out[2] = (float) lerp(e.startB, e.endB, p);
+                }
+                return out;
             }
-            last = new float[]{e.endR, e.endG, e.endB};
+            lastR = e.endR;
+            lastG = e.endG;
+            lastB = e.endB;
+            hasLast = true;
         }
-        return last;
+        if (!hasLast) return null;
+        if (out == null || out.length < 3) out = new float[3];
+        out[0] = lastR;
+        out[1] = lastG;
+        out[2] = lastB;
+        return out;
     }
 
     public static String getTextVal(double t, List<TextEvent> events, EventCursor cur) {

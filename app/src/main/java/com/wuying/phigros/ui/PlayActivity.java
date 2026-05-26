@@ -192,7 +192,7 @@ public class PlayActivity extends AppCompatActivity implements GameRenderer.Call
         if (musicVolume < 0f) musicVolume = 0f;
         musicVolume = Math.max(0.0f, Math.min(musicVolume, 5.0f));
         if (!Float.isFinite(backgroundDim)) backgroundDim = 0.6f;
-        backgroundDim = Math.max(0.0f, Math.min(backgroundDim, 1.0f));
+        backgroundDim = Math.max(0.3f, Math.min(backgroundDim, 0.8f));
 
         gameTypeface = Typeface.createFromAsset(getAssets(), HUD_FONT_ASSET);
 
@@ -329,7 +329,7 @@ public class PlayActivity extends AppCompatActivity implements GameRenderer.Call
                             this, chart, bgPath, songName, difficulty,
                             totalTimeSec, aspectRatio, keyScale, scrollSpeed,
                             mirrorX, musicSpeed, userOffsetSec, backgroundDim,
-                            lowResMode, multiPressHighlight, apfcIndicator,
+                            lowResMode, antialias, multiPressHighlight, apfcIndicator,
                             false, challengeMode, showFps, showDebugInfo,
                             skinPath, this);
                     renderer.setReplayPlayback(replayData);
@@ -350,7 +350,7 @@ public class PlayActivity extends AppCompatActivity implements GameRenderer.Call
                         this, chart, bgPath, songName, difficulty,
                         totalTimeSec, aspectRatio, keyScale, scrollSpeed,
                         mirrorX, musicSpeed, userOffsetSec, backgroundDim,
-                        lowResMode, multiPressHighlight, apfcIndicator,
+                        lowResMode, antialias, multiPressHighlight, apfcIndicator,
                         useAutoplay, challengeMode, showFps, showDebugInfo,
                         skinPath, this);
                 if (replayRecorderData != null) {
@@ -823,10 +823,10 @@ public class PlayActivity extends AppCompatActivity implements GameRenderer.Call
             if (isFinishing() || isDestroyed()) return;
             if (renderer == null) return;
 
-            renderer.beginIntro();
+            int introGeneration = renderer.beginIntro();
             new Handler(Looper.getMainLooper()).postDelayed(() -> {
                 if (isFinishing() || isDestroyed()) return;
-                if (renderer != null && renderer.isMenuVisible()) return;
+                if (renderer == null || !renderer.isIntroGenerationCurrent(introGeneration)) return;
                 NativeAudioEngine.start();
             }, GameRenderer.INTRO_BUFFER_MS);
         }, 150L);

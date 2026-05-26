@@ -51,6 +51,8 @@ public class ChartSelectActivity extends AppCompatActivity {
     private static final String PREF_MUSIC_SPEED = "music_speed";
     private static final String PREF_SCROLL_SPEED = "scroll_speed";
     private static final String PREF_REPLAY_ENABLED = "replay_enabled";
+    private static final float BG_DIM_MIN = 0.3f;
+    private static final float BG_DIM_MAX = 0.8f;
 
     public static final String EXTRA_REPLAY_MODE = "extra_replay_mode";
     public static final String EXTRA_REPLAY_PATH = "extra_replay_path";
@@ -540,7 +542,7 @@ public class ChartSelectActivity extends AppCompatActivity {
     public boolean isChallengeMode()     { return challengeMode; }
     public void setChallengeMode(boolean v) { challengeMode = v; editPrefs().putBoolean(PREF_CHALLENGE, challengeMode).apply(); }
     public float getBackgroundDim()      { return backgroundDim; }
-    public void setBackgroundDim(float v) { backgroundDim = clampFinite(v, 0f, 1f, 0.6f); editPrefs().putFloat(PREF_BG_DIM, backgroundDim).apply(); }
+    public void setBackgroundDim(float v) { backgroundDim = clampFinite(v, BG_DIM_MIN, BG_DIM_MAX, 0.6f); editPrefs().putFloat(PREF_BG_DIM, backgroundDim).apply(); }
     public boolean isLowResMode()        { return lowResMode; }
     public void setLowResMode(boolean v) { lowResMode = v; editPrefs().putBoolean(PREF_LOW_RES, lowResMode).apply(); }
     public boolean isAntialias()         { return antialias; }
@@ -570,7 +572,7 @@ public class ChartSelectActivity extends AppCompatActivity {
         mirrorX = p.getBoolean(PREF_MIRROR_X, mirrorX);
         autoplay = p.getBoolean(PREF_AUTOPLAY, autoplay);
         challengeMode = p.getBoolean(PREF_CHALLENGE, challengeMode);
-        backgroundDim = clampFinite(p.getFloat(PREF_BG_DIM, backgroundDim), 0f, 1f, 0.6f);
+        backgroundDim = clampFinite(p.getFloat(PREF_BG_DIM, backgroundDim), BG_DIM_MIN, BG_DIM_MAX, 0.6f);
         lowResMode = p.getBoolean(PREF_LOW_RES, lowResMode);
         antialias = p.getBoolean(PREF_ANTIALIAS, antialias);
         showFps = p.getBoolean(PREF_SHOW_FPS, showFps);

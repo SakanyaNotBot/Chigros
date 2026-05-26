@@ -35,13 +35,11 @@ import java.nio.ByteOrder;
 import java.nio.FloatBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -94,9 +92,15 @@ public class GameRenderer implements GLSurfaceView.Renderer {
     }
 
     /** Starts or restarts the intro animation buffer. Caller delays audio start accordingly. */
-    public void beginIntro() {
+    public int beginIntro() {
+        int generation = ++introGeneration;
         introStarted = true;
         introStartNs = System.nanoTime();
+        return generation;
+    }
+
+    public boolean isIntroGenerationCurrent(int generation) {
+        return introGeneration == generation && !restartIntroNeedsInit && !menuVisible;
     }
 
     private float computeIntroLineScale() {
@@ -140,21 +144,88 @@ public class GameRenderer implements GLSurfaceView.Renderer {
         return Math.max(0f, (System.nanoTime() - start) / 1_000_000_000f);
     }
 
-    private float computeBackgroundDimAlpha() {
-        float alpha = backgroundDim;
-        if (introStarted) {
-            float p = MathUtils.clamp(elapsedIntroSeconds() / UI_INTRO_DUR_SEC, 0f, 1f);
-            alpha *= p * p * (3f - 2f * p);
-        } else {
-            alpha = 0f;
+    private static float smoothStep01(float p) {
+        p = MathUtils.clamp(p, 0f, 1f);
+        return p * p * (3f - 2f * p);
+    }
+
+    private float introUiProgress() {
+        if (!introStarted || UI_INTRO_DUR_SEC <= 0f) {
+            return introStarted ? 1f : 0f;
         }
-        if (isInOutro && outroStartWallNs > 0L) {
-            float elapsedSec = (System.nanoTime() - outroStartWallNs) / 1_000_000_000f - UI_OUTRO_WAIT_SEC;
-            float p = MathUtils.clamp(elapsedSec / UI_OUTRO_DUR_SEC, 0f, 1f);
-            float smooth = p * p * (3f - 2f * p);
-            alpha *= 1f - smooth;
+        return MathUtils.clamp(elapsedIntroSeconds() / UI_INTRO_DUR_SEC, 0f, 1f);
+    }
+
+    private float outroUiProgress() {
+        if (!isInOutro || outroStartWallNs <= 0L || UI_OUTRO_DUR_SEC <= 0f) {
+            return 0f;
+        }
+        float elapsedSec = (System.nanoTime() - outroStartWallNs) / 1_000_000_000f - UI_OUTRO_WAIT_SEC;
+        return MathUtils.clamp(elapsedSec / UI_OUTRO_DUR_SEC, 0f, 1f);
+    }
+
+    private float elapsedOutroSeconds() {
+        if (!isInOutro || outroStartWallNs <= 0L) return 0f;
+        return Math.max(0f, (System.nanoTime() - outroStartWallNs) / 1_000_000_000f);
+    }
+
+    private boolean isInOutroLineCollapse() {
+        if (!isInOutro) return false;
+        float elapsedSec = elapsedOutroSeconds();
+        return elapsedSec >= OUTRO_LINE_COLLAPSE_START_SEC
+                && elapsedSec < OUTRO_LINE_COLLAPSE_START_SEC + OUTRO_LINE_COLLAPSE_DUR_SEC;
+    }
+
+    private float computeOutroLineCollapseScale() {
+        if (!isInOutro) return 0f;
+        float local = (elapsedOutroSeconds() - OUTRO_LINE_COLLAPSE_START_SEC) / OUTRO_LINE_COLLAPSE_DUR_SEC;
+        if (local < 0f || local >= 1f) return 0f;
+        return 1f - local;
+    }
+
+    private float computeGameCanvasScaleX() {
+        if (!isInOutro) return 1f;
+        // ProgressControl.Update keeps GameCanvas.x at 0 outside the
+        // _overTime 1.0s..1.7s residual-line collapse window.
+        return isInOutroLineCollapse() ? computeOutroLineCollapseScale() : 0f;
+    }
+
+    private float computeStageTextureAlpha() {
+        return 1f;
+    }
+
+    private boolean hasIntroAudioReleaseElapsed() {
+        if (!introStarted || introStartNs <= 0L) return false;
+        long delayNs = INTRO_BUFFER_MS * 1_000_000L;
+        return System.nanoTime() - introStartNs >= delayNs;
+    }
+
+    private float computeBackgroundDimAlpha() {
+        // Official LevelInformation.Update writes GameInformation.backgroundAlpha
+        // directly to the stage black Image alpha.
+        return MathUtils.clamp(backgroundDim, 0f, 1f);
+    }
+
+    private float computeSideDimAlpha() {
+        float base = MathUtils.clamp(backgroundDim, 0f, 1f);
+        // Official LevelStart/LevelOver animate the side TranslucentImage
+        // independently from backgroundAlpha, so the side/stage boundary does
+        // not collapse when the user background brightness changes.
+        float side = computeOfficialSideDimAlpha(base);
+        float alpha = introStarted ? side : base;
+        if (introStarted && !isInOutro) {
+            float p = smoothStep01(introUiProgress());
+            alpha = base + (side - base) * p;
+        }
+        if (isInOutro) {
+            alpha = base;
         }
         return MathUtils.clamp(alpha, 0f, 1f);
+    }
+
+    private static float computeOfficialSideDimAlpha(float baseDimAlpha) {
+        float base = MathUtils.clamp(baseDimAlpha, 0f, 1f);
+        return 1f - (1f - base) * (1f - OFFICIAL_SIDE_EXTRA_DIM_ALPHA);
     }
 
     /**
@@ -265,8 +336,9 @@ public class GameRenderer implements GLSurfaceView.Renderer {
     private final boolean mirrorX;         // X-axis mirror (demo)
     private final float musicSpeed;        // playback speed (x0.5 .. x2.0)
     private final float userOffsetSec;     // additional chart offset in seconds
-    private final float backgroundDim;     // 0..1
+    private final float backgroundDim;     // 0.3..0.8
     private final boolean lowResMode;
+    private final boolean antialias;
     private final boolean multiPressHighlight;
     private final boolean apfcIndicator;
     private final boolean autoplay;
@@ -304,9 +376,12 @@ public class GameRenderer implements GLSurfaceView.Renderer {
     private static final float UI_INTRO_DUR_SEC = 40f / 60f;
     private static final float UI_OUTRO_DUR_SEC = 40f / 60f;
     private static final float COMBO_LABEL_OUTRO_FADE_SEC = 35f / 60f;
-    public static final float OUTRO_DUR_SEC = 1.5f;
+    private static final float OUTRO_LINE_COLLAPSE_START_SEC = 1.0f;
+    private static final float OUTRO_LINE_COLLAPSE_DUR_SEC = 0.7f;
+    public static final float OUTRO_DUR_SEC = OUTRO_LINE_COLLAPSE_START_SEC + OUTRO_LINE_COLLAPSE_DUR_SEC;
     public static final float OUTRO_WAIT_SEC = 0.0f;
     private static final float UI_OUTRO_WAIT_SEC = 0.0f;
+    private static final float OFFICIAL_SIDE_EXTRA_DIM_ALPHA = 0.5f;
     private static final float OFFICIAL_UI_ROOT_SCALE_Y_START = 1.1875f;
     private static final float[] BEGAN_JUDGE_LINE_SCALE_X = new float[]{
             0.0000000f, 0.0004785f, 0.0011947f, 0.0021729f,
@@ -342,6 +417,8 @@ public class GameRenderer implements GLSurfaceView.Renderer {
     private volatile boolean introStarted = false;
     private volatile boolean introAutoResumePending = false;
     private volatile long introAutoResumeAtNs = -1L;
+    private volatile int introGeneration = 0;
+    private volatile int introAutoResumeGeneration = 0;
     /** Set by restartInternal() to defer beginIntro() to the GL thread. */
     private volatile boolean restartIntroNeedsInit = false;
     private float frameIntroLineScale = 0f;
@@ -350,10 +427,6 @@ public class GameRenderer implements GLSurfaceView.Renderer {
     private float frameIntroLinearT = 0f;
     private boolean isInOutro = false;
     private volatile boolean wasInIntro = true; // tracks previous-frame intro/pre-music gate
-    /** Audio-playhead value captured when the intro/hold animation finished.
-     *  Subtracted from the measured playhead so that the first real chart frame
-     *  always starts at t=0 regardless of when the audio engine began reporting. */
-    private double musicReferenceAtIntroExit = 0.0;
     private float outroStartTimeSec = -1f;
     private long outroStartWallNs = -1L; // wall-clock based exit animation timing
 
@@ -456,6 +529,8 @@ public class GameRenderer implements GLSurfaceView.Renderer {
     private static final float OFFICIAL_HUD_COMBO_NUMBER_TEXT_SIZE = 70f;
     private static final float OFFICIAL_HUD_COMBO_LABEL_TEXT_SIZE = 24f;
     private static final String HUD_LEGACY_TEXT_FONT_FEATURES = "'kern' 0, 'liga' 0, 'clig' 0";
+    private static final float HUD_LEGACY_TEXT_TRACKING_EM = 0.02f;
+    private static final float HUD_LEGACY_SPACE_ADVANCE_ADJUST_EM = -0.012f;
 
     private Texture[][] noteHeadTex = new Texture[5][2]; // [type][morebets]
     private Texture texHold;   // hold.png
@@ -500,6 +575,7 @@ public class GameRenderer implements GLSurfaceView.Renderer {
     // Programs
     private int progSprite = 0;
     private int progBlur = 0;
+    private int progFxaa = 0;
 
     // Sprite shader locations
     private int locPos;
@@ -514,6 +590,12 @@ public class GameRenderer implements GLSurfaceView.Renderer {
     private int locBTex;
     private int locBTexelOffset;
 
+    // FXAA shader locations
+    private int locFxaaPos;
+    private int locFxaaUv;
+    private int locFxaaTex;
+    private int locFxaaInvResolution;
+
     // Buffers
     private FloatBuffer quadPos;
     private FloatBuffer quadUv;
@@ -525,9 +607,12 @@ public class GameRenderer implements GLSurfaceView.Renderer {
     private final float[] tmpMvp = new float[16];
     private final float[] tmpWorld = new float[16];
     private final float[] tmpBatchProj = new float[16];
+    private final float[] tmpSavedProj = new float[16];
     private final float[] tmpUv = new float[8];
     private final float[] tmpVisibleRange = new float[2];
     private final ArrayList<Texture> noteHeadTextureDrawList = new ArrayList<>();
+    private final HoldUv[] holdUvCache = new HoldUv[2];
+    private final float[][] noteWidthScale = new float[5][2];
 
     // Batch rendering (O(1) draw calls for many sprites)
     private static final int MAX_BATCH_QUADS = 1024;
@@ -535,7 +620,7 @@ public class GameRenderer implements GLSurfaceView.Renderer {
     private FloatBuffer batchBuffer;
     private int progBatch = 0;
     private int locBatchPos, locBatchUv, locBatchColor, locBatchProj, locBatchTex;
-    // Non-premultiplied hit-fx shader; used with standard alpha blending
+    // Premultiplied-alpha hit-fx shader; used with premultiplied blending.
     private int progHitFx = 0;
     private int locHitFxPos, locHitFxUv, locHitFxColor, locHitFxProj, locHitFxTex;
     private int batchCount = 0;
@@ -543,9 +628,7 @@ public class GameRenderer implements GLSurfaceView.Renderer {
     // Stage-level mirror transform (applied only while drawing chart content)
     private final float[] stagePreTransform = new float[16];
     private boolean inStageSpace = false;
-    // When true, renderSceneDirect() uses frameGlobalAlpha=1 regardless of intro state,
-    // so the prpr FBO gets an un-faded scene for shader processing.
-    private boolean renderForPrprFbo = false;
+    private boolean stagePreTransformActive = false;
 
     // UI rects (screen space)
     private final RectF pauseRect = new RectF();
@@ -661,20 +744,21 @@ public class GameRenderer implements GLSurfaceView.Renderer {
     private static final double HOLD_PARTICLE_INTERVAL_BEATS = 0.5;
     private static final double HOLD_TAIL_EARLY_SETTLE = 0.220;
     private static final double HOLD_DESTROY_DELAY = 0.250;
-    private static final float JUDGE_LINE_Y_TOLERANCE = 0.55f;
 
     private double frameChartTimeSec = 0.0;
     private double framePlayTimeSec = 0.0;
 
-    private final ConcurrentHashMap<Integer, TouchState> activeTouches = new ConcurrentHashMap<>();
-    private final Set<Integer> startedTouchIds = Collections.synchronizedSet(new HashSet<>());
-    private final ConcurrentHashMap<Integer, FlickTracker> flickTrackers = new ConcurrentHashMap<>();
+    private final Map<Integer, TouchState> activeTouches = new HashMap<>();
+    private final Set<Integer> startedTouchIds = new HashSet<>();
+    private final Map<Integer, FlickTracker> flickTrackers = new HashMap<>();
     private final ArrayList<HitEffect> hitEffects = new ArrayList<>();
     private final ArrayList<BadEffect> badEffects = new ArrayList<>();
     private final float[] tmpNotePos = new float[2];
     private final float[] lineRotOut = new float[1];
+    private final JudgeLine.StateHolder tmpHistoricalLineState = new JudgeLine.StateHolder();
 
     // Menu blur FBO
+    private FboTex aaFbo;
     private FboTex sceneFbo;
     private FboTex blurFbo1;
     private FboTex blurFbo2;
@@ -711,6 +795,7 @@ public class GameRenderer implements GLSurfaceView.Renderer {
                         float userOffsetSec,
                         float backgroundDim,
                         boolean lowResMode,
+                        boolean antialias,
                         boolean multiPressHighlight,
                         boolean apfcIndicator,
                         boolean autoplay,
@@ -732,8 +817,9 @@ public class GameRenderer implements GLSurfaceView.Renderer {
         this.mirrorX = mirrorX;
         this.musicSpeed = (musicSpeed <= 0f) ? 1f : musicSpeed;
         this.userOffsetSec = userOffsetSec;
-        this.backgroundDim = (Float.isFinite(backgroundDim) ? MathUtils.clamp(backgroundDim, 0f, 1f) : 0.6f);
+        this.backgroundDim = (Float.isFinite(backgroundDim) ? MathUtils.clamp(backgroundDim, 0.3f, 0.8f) : 0.6f);
         this.lowResMode = lowResMode;
+        this.antialias = antialias;
         this.multiPressHighlight = multiPressHighlight;
         this.apfcIndicator = apfcIndicator;
         this.autoplay = autoplay;
@@ -1195,12 +1281,15 @@ public class GameRenderer implements GLSurfaceView.Renderer {
         introHoldStartNs = -1L;
         isIntroHoldDone = false;
         introStarted = false;
+        introGeneration++;
+        introAutoResumePending = false;
+        introAutoResumeAtNs = -1L;
+        introAutoResumeGeneration = 0;
         isMusicStartedFlag = false;
         introStartNs = -1L;
         frameIntroLineScale = 0f;
         frameGlobalAlpha = 0f;
         wasInIntro = true;
-        musicReferenceAtIntroExit = 0.0;
         frameIntroLinearT = 0f;
 
         smoothClockInit = false;
@@ -1666,6 +1755,7 @@ public class GameRenderer implements GLSurfaceView.Renderer {
         progSprite = buildProgram(VS_SPRITE, FS_SPRITE);
         // blur pass uses a fullscreen vertex shader (no uMVP)
         progBlur = buildProgram(VS_FULLSCREEN, FS_BLUR);
+        progFxaa = buildProgram(VS_FULLSCREEN, FS_FXAA);
 
         // sprite locations
         locPos = GLES20.glGetAttribLocation(progSprite, "aPosition");
@@ -1680,6 +1770,12 @@ public class GameRenderer implements GLSurfaceView.Renderer {
         locBTex = GLES20.glGetUniformLocation(progBlur, "uTexture");
         locBTexelOffset = GLES20.glGetUniformLocation(progBlur, "uTexelOffset");
 
+        // FXAA locations
+        locFxaaPos = GLES20.glGetAttribLocation(progFxaa, "aPosition");
+        locFxaaUv = GLES20.glGetAttribLocation(progFxaa, "aTexCoord");
+        locFxaaTex = GLES20.glGetUniformLocation(progFxaa, "uTexture");
+        locFxaaInvResolution = GLES20.glGetUniformLocation(progFxaa, "uInvResolution");
+
         // batch program
         progBatch = buildProgram(VS_BATCH, FS_BATCH);
         locBatchPos = GLES20.glGetAttribLocation(progBatch, "aPosition");
@@ -1688,7 +1784,7 @@ public class GameRenderer implements GLSurfaceView.Renderer {
         locBatchProj = GLES20.glGetUniformLocation(progBatch, "uProjection");
         locBatchTex = GLES20.glGetUniformLocation(progBatch, "uTexture");
 
-        // hit-fx program (non-premultiplied output for standard alpha blending)
+        // hit-fx program (premultiplied-alpha output/blending)
         progHitFx = buildProgram(VS_BATCH, FS_HITFX);
         locHitFxPos = GLES20.glGetAttribLocation(progHitFx, "aPosition");
         locHitFxUv = GLES20.glGetAttribLocation(progHitFx, "aTexCoord");
@@ -1742,6 +1838,7 @@ public class GameRenderer implements GLSurfaceView.Renderer {
         // Assign hold textures to noteHeadTex for width calculation
         noteHeadTex[GameConstants.NOTE_HOLD][0] = texHold;
         noteHeadTex[GameConstants.NOTE_HOLD][1] = texHoldMh;
+        rebuildTextureMetrics();
 
         // hit fx
         texHitFx = loadSkinTexture("hit_fx.png", "res/hit_fx.png");
@@ -1811,6 +1908,9 @@ public class GameRenderer implements GLSurfaceView.Renderer {
         int bw = Math.max(1, viewW / 2);
         int bh = Math.max(1, viewH / 2);
         releaseFbos();
+        if (antialias) {
+            aaFbo = new FboTex(viewW, viewH);
+        }
         sceneFbo = new FboTex(bw, bh);
         blurFbo1 = new FboTex(bw, bh);
         blurFbo2 = new FboTex(bw, bh);
@@ -1897,11 +1997,13 @@ public class GameRenderer implements GLSurfaceView.Renderer {
 
         // Stage-level mirror transform (X-axis)
         Matrix.setIdentityM(stagePreTransform, 0);
+        stagePreTransformActive = false;
         if (mirrorX) {
             float cx = stageL + stageW * 0.5f;
             Matrix.translateM(stagePreTransform, 0, cx, 0f, 0f);
             Matrix.scaleM(stagePreTransform, 0, -1f, 1f, 1f);
             Matrix.translateM(stagePreTransform, 0, -cx, 0f, 0f);
+            stagePreTransformActive = true;
         }
 
         if (notifyActivity && callback != null) {
@@ -1962,6 +2064,8 @@ public class GameRenderer implements GLSurfaceView.Renderer {
             }
         }
 
+        FboTex previousAaTarget = beginAntialiasFrame(shouldPostProcessAntialias());
+
         if (menuVisible && pauseMode != PAUSE_FADEOUT) {
             if (needBlurUpdate) {
                 renderSceneToFbo(sceneFbo);
@@ -1970,7 +2074,7 @@ public class GameRenderer implements GLSurfaceView.Renderer {
                 needBlurUpdate = false;
             }
 
-            GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0);
+            bindAntialiasTarget(previousAaTarget);
             GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT);
             drawFullscreenTextureFbo(blurFbo2.tex, 1f, 1f, 1f, 1f);
 
@@ -1994,18 +2098,19 @@ public class GameRenderer implements GLSurfaceView.Renderer {
                 }
             }
 
+            endAntialiasFrame(previousAaTarget);
             return;
         }
 
         if (lowResMode && !(hasPrprEffects && prprFullA != null && !prprPrograms.isEmpty())) {
             renderSceneToFbo(sceneFbo);
-            GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0);
+            bindAntialiasTarget(previousAaTarget);
             GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT);
             drawFullscreenTextureFbo(sceneFbo.tex, 1f, 1f, 1f, 1f);
         } else if (hasPrprEffects && prprFullA != null && !prprPrograms.isEmpty()) {
-            renderSceneWithPrprEffects();
+            renderSceneWithPrprEffects(previousAaTarget);
         } else {
-            GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0);
+            bindAntialiasTarget(previousAaTarget);
             GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT);
             renderSceneDirect();
             drawGameHudWithAnimationsClipped();
@@ -2037,29 +2142,98 @@ public class GameRenderer implements GLSurfaceView.Renderer {
                 drawSolidRect(0f, 0f, viewW, viewH, 0f, 0f, 0f, 0.45f * a);
             }
         }
+
+        endAntialiasFrame(previousAaTarget);
     }
 
     private float hudCountTextSizePx = -1f;
+
+    private boolean shouldPostProcessAntialias() {
+        if (!antialias) {
+            return false;
+        }
+        if (menuVisible && pauseMode != PAUSE_FADEOUT) {
+            return true;
+        }
+        if (lowResMode && !(hasPrprEffects && prprFullA != null && !prprPrograms.isEmpty())) {
+            return true;
+        }
+        return hasPrprEffects && prprFullA != null && !prprPrograms.isEmpty();
+    }
+
+    @Nullable
+    private FboTex beginAntialiasFrame(boolean usePostProcessAntialias) {
+        if (!usePostProcessAntialias || aaFbo == null || progFxaa == 0) {
+            return null;
+        }
+        GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, aaFbo.fbo);
+        GLES20.glViewport(0, 0, viewW, viewH);
+        return aaFbo;
+    }
+
+    private void bindAntialiasTarget(@Nullable FboTex target) {
+        if (target != null) {
+            GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, target.fbo);
+        } else {
+            GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0);
+        }
+        GLES20.glViewport(0, 0, viewW, viewH);
+    }
+
+    private void endAntialiasFrame(@Nullable FboTex target) {
+        if (target == null) {
+            return;
+        }
+        drawFxaaToDefaultFramebuffer(target.tex);
+    }
+
+    private void drawFxaaToDefaultFramebuffer(@NonNull Texture src) {
+        GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0);
+        GLES20.glViewport(0, 0, viewW, viewH);
+        GLES20.glDisable(GLES20.GL_BLEND);
+        GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT);
+
+        GLES20.glUseProgram(progFxaa);
+        GLES20.glActiveTexture(GLES20.GL_TEXTURE0);
+        GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, src.id);
+        GLES20.glUniform1i(locFxaaTex, 0);
+        GLES20.glUniform2f(locFxaaInvResolution, 1f / Math.max(1f, (float) viewW), 1f / Math.max(1f, (float) viewH));
+
+        drawFullQuadWithCurrentProgram(locFxaaPos, locFxaaUv, 0f, 1f, 1f, 0f);
+
+        GLES20.glEnable(GLES20.GL_BLEND);
+        GLES20.glBlendFuncSeparate(
+                GLES20.GL_ONE, GLES20.GL_ONE_MINUS_SRC_ALPHA,
+                GLES20.GL_ONE, GLES20.GL_ONE_MINUS_SRC_ALPHA);
+    }
 
     private void maybeAutoResumeAfterIntro() {
         if (!introAutoResumePending) return;
         if (menuVisible) return;
         if (pauseMode != PAUSE_NONE) return;
+        int generation = introAutoResumeGeneration;
+        if (generation <= 0 || generation != introGeneration || restartIntroNeedsInit || !introStarted) {
+            introAutoResumePending = false;
+            introAutoResumeAtNs = -1L;
+            introAutoResumeGeneration = 0;
+            return;
+        }
         long at = introAutoResumeAtNs;
         if (at <= 0L) {
             introAutoResumePending = false;
+            introAutoResumeGeneration = 0;
             return;
         }
         if (System.nanoTime() >= at) {
             introAutoResumePending = false;
             introAutoResumeAtNs = -1L;
+            introAutoResumeGeneration = 0;
             NativeAudioEngine.pause(false);
             // Reset the smooth clock so that biases accumulated during the
             // intro period (where raw playhead stayed at 0 while wall-clock
             // time advanced) do not cause the first real chart frame to jump
             // ahead by 2–3 frames or cause holds to end early.
             smoothClockInit = false;
-            isMusicStartedFlag = true;
         }
     }
 
@@ -2150,9 +2324,9 @@ public class GameRenderer implements GLSurfaceView.Renderer {
 
     // --- prpr storyboard shader pipeline ---
 
-    private void renderSceneWithPrprEffects() {
+    private void renderSceneWithPrprEffects(@Nullable FboTex previousAaTarget) {
         if (chart.prprEffects == null || chart.prprEffects.isEmpty()) {
-            GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0);
+            bindAntialiasTarget(previousAaTarget);
             GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT);
             renderSceneDirect();
             drawGameHudWithAnimationsClipped();
@@ -2171,7 +2345,7 @@ public class GameRenderer implements GLSurfaceView.Renderer {
         }
 
         if (tmpActiveNonGlobal.isEmpty() && tmpActiveGlobal.isEmpty()) {
-            GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0);
+            bindAntialiasTarget(previousAaTarget);
             GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT);
             renderSceneDirect();
             drawGameHudWithAnimationsClipped();
@@ -2181,16 +2355,12 @@ public class GameRenderer implements GLSurfaceView.Renderer {
         // shaders only apply during animateStatus=1 (playing).
         // During intro (frameIntroLineScale < 1) and outro (isInOutro), skip shader effects.
         if (frameIntroLineScale < 0.999f || isInOutro) {
-            GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0);
+            bindAntialiasTarget(previousAaTarget);
             GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT);
             renderSceneDirect();
             drawGameHudWithAnimationsClipped();
             return;
         }
-
-        // ---- intro fade tracking: storyboard should not be affected by entrance animation ----
-        float savedGlobalAlpha = frameGlobalAlpha;
-        boolean introFadeActive = (savedGlobalAlpha < 1f);
 
         // 1) Base scene (NO HUD) -> full fbo
         // During intro, render at full alpha so storyboard shaders process an un-faded scene.
@@ -2198,9 +2368,7 @@ public class GameRenderer implements GLSurfaceView.Renderer {
         GLES20.glViewport(0, 0, viewW, viewH);
         GLES20.glClearColor(0f, 0f, 0f, 1f);
         GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT);
-        renderForPrprFbo = true;
         renderSceneDirect();
-        renderForPrprFbo = false;
         Texture fullInput = prprFullA.tex;
 
         // 2) Stage-only effects: full-size ping-pong, viewport = stage rect (HUD still not included).
@@ -2237,7 +2405,7 @@ public class GameRenderer implements GLSurfaceView.Renderer {
         }
 
         // 4) Present storyboard output (phispler: shader result composited over existing scene)
-        GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0);
+        bindAntialiasTarget(previousAaTarget);
         GLES20.glViewport(0, 0, viewW, viewH);
         GLES20.glClearColor(0f, 0f, 0f, 0f);
         GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT);
@@ -2260,76 +2428,26 @@ public class GameRenderer implements GLSurfaceView.Renderer {
             drawGameHudWithAnimationsClipped();
         }
 
-        // Apply a subtle intro fade overlay so the stage isn't jarringly bright
-        // while decorative lines extend and HUD slides in.
-        if (introFadeActive && savedGlobalAlpha < 1f) {
-            float fadeAlpha = Math.max(0f, 1f - savedGlobalAlpha);
-            if (fadeAlpha > 0.005f) {
-                drawSolidRect(0, 0, viewW, viewH, 0f, 0f, 0f, fadeAlpha);
-            }
-        }
-
     }
 
     private void drawBackgroundAndBarsOnly() {
-        // Background cover
-        if (texBackgroundBlur != null) {
-            drawTextureCover(texBackgroundBlur, 0f, 0f, (float) viewW, (float) viewH, 1.1f, true, 1f, 1f, 1f, 1f);
-        } else if (texBackground != null) {
-            drawTextureCover(texBackground, 0f, 0f, (float) viewW, (float) viewH, 1.1f, false, 1f, 1f, 1f, 1f);
-        } else {
-            drawSolidRect(0, 0, viewW, viewH, 0f, 0f, 0f, 1f);
-        }
-        // Dim outside-stage area ( unsafeBackgroundDim = 0.8, i.e. 20% visible)
-        drawSolidRect(0, 0, viewW, viewH, 0f, 0f, 0f, 0.80f);
+        drawOfficialSideBackgrounds(1f);
+        drawStageBackgroundOnly(computeStageTextureAlpha());
     }
 
-    private Texture renderStageSceneToFbo(@NonNull FboTex target) {
-        // Render the stage content as if the stage fills the whole target surface.
-        // We temporarily override viewW/viewH and stage rect, then restore them.
-        final int oldViewW = viewW;
-        final int oldViewH = viewH;
-        final float oldStageL = stageL;
-        final float oldStageT = stageT;
-        final float oldStageW = stageW;
-        final float oldStageH = stageH;
-        final float[] oldProj = proj.clone();
-        final float[] oldStagePre = stagePreTransform.clone();
-
-        GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, target.fbo);
-        GLES20.glViewport(0, 0, target.w, target.h);
-
-        viewW = target.w;
-        viewH = target.h;
-        stageL = 0f;
-        stageT = 0f;
-        stageW = (float) target.w;
-        stageH = (float) target.h;
-
-        Matrix.orthoM(proj, 0, 0f, viewW, viewH, 0f, -1f, 1f);
-
-        Matrix.setIdentityM(stagePreTransform, 0);
-        if (mirrorX) {
-            float cx = stageW * 0.5f;
-            Matrix.translateM(stagePreTransform, 0, cx, 0f, 0f);
-            Matrix.scaleM(stagePreTransform, 0, -1f, 1f, 1f);
-            Matrix.translateM(stagePreTransform, 0, -cx, 0f, 0f);
+    private void drawStageBackgroundOnly(float alpha) {
+        if (alpha <= 0.001f) {
+            drawSolidRect(stageL, stageT, stageW, stageH, 0f, 0f, 0f, 1f);
+            return;
         }
-
-        renderSceneDirect();
-
-        // Restore state
-        viewW = oldViewW;
-        viewH = oldViewH;
-        stageL = oldStageL;
-        stageT = oldStageT;
-        stageW = oldStageW;
-        stageH = oldStageH;
-        System.arraycopy(oldProj, 0, proj, 0, 16);
-        System.arraycopy(oldStagePre, 0, stagePreTransform, 0, 16);
-        GLES20.glViewport(0, 0, oldViewW, oldViewH);
-
-        return target.tex;
+        Texture tex = texBackgroundBlur != null ? texBackgroundBlur : texBackground;
+        boolean isFbo = texBackgroundBlur != null;
+        if (tex != null) {
+            drawOfficialBackgroundClip(tex, isFbo, stageL, stageT, stageW, stageH, alpha);
+        } else {
+            drawSolidRect(stageL, stageT, stageW, stageH, 0f, 0f, 0f, alpha);
+        }
+        drawSolidRect(stageL, stageT, stageW, stageH, 0f, 0f, 0f, computeBackgroundDimAlpha());
     }
 
     private Texture applyPrprEffectChain(@NonNull List<PrprEffect> effects,
@@ -2736,32 +2854,15 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
     private void renderSceneDirect() {
         boolean needBars = !isStageFullscreen();
 
-        if (needBars) {
-            if (texBackgroundBlur != null) {
-                drawTextureCover(texBackgroundBlur, 0f, 0f, viewW, viewH, 1.1f, true, 1f, 1f, 1f, 1f);
-            } else if (texBackground != null) {
-                drawTextureCover(texBackground, 0f, 0f, viewW, viewH, 1.1f, false, 1f, 1f, 1f, 1f);
-            } else {
-                drawSolidRect(0, 0, viewW, viewH, 0f, 0f, 0f, 1f);
-            }
-
-            // Dim outside-stage area ( unsafeBackgroundDim = 0.8, i.e. 20% visible)
-            drawSolidRect(0, 0, viewW, viewH, 0f, 0f, 0f, 0.80f);
-
-            enableStageScissor();
-        }
-
-        inStageSpace = true;
-        batchFlipUv = mirrorX;
-
         // Deferred intro initialization for restart: beginIntro() must run on
         // the GL thread so that introStartNs is a valid wall-clock reference.
         if (restartIntroNeedsInit) {
             restartIntroNeedsInit = false;
-            beginIntro();
+            int generation = beginIntro();
             wasInIntro = true;
             introAutoResumePending = true;
             introAutoResumeAtNs = introStartNs + (long) (INTRO_BUFFER_MS * 1_000_000L);
+            introAutoResumeGeneration = generation;
         }
 
         // Detect when music actually starts playing (initial play path).
@@ -2769,7 +2870,7 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
         // We reset smoothClockInit so the next getSmoothedPlayheadSeconds()
         // initializes fresh from the actual audio playhead, avoiding
         // accumulated biases from the pre-music gap period.
-        if (!isMusicStartedFlag) {
+        if (!isMusicStartedFlag && hasIntroAudioReleaseElapsed()) {
             double rawCheck = NativeAudioEngine.getPlayheadSeconds();
             if (rawCheck > 0.001) {
                 isMusicStartedFlag = true;
@@ -2779,7 +2880,15 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
         final double musicPos = getSmoothedPlayheadSeconds();
         frameIntroLineScale = computeIntroLineScale();
         updateOutroState(musicPos);
-        frameGlobalAlpha = introStarted ? 1f : 0f;
+
+        if (needBars) {
+            drawOfficialSideBackgrounds(1f);
+            enableStageScissor();
+        }
+        drawStageBackgroundOnly(computeStageTextureAlpha());
+
+        inStageSpace = true;
+        batchFlipUv = mirrorX;
 
         // 200ms hold after intro animation completes.
         // During this hold, the fake line stays at full width while real lines
@@ -2798,19 +2907,24 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
             }
         }
 
-        // Intro, hold, and pre-music use the official fake line. Outro keeps real chart lines.
+        // Intro, hold, and pre-music use Began.anim's separate JudgeLine.
+        // After LevelOver, ProgressControl.Update scales GameCanvas.x over
+        // _overTime 1.0s..1.7s, so the residual real lines collapse without
+        // creating a second fake line.
         boolean inIntro = (frameIntroLineScale < 0.999f) || isInIntroHold || !isMusicStartedFlag;
         boolean blockGameplayForTransition = inIntro || isInOutro;
+        float gameCanvasScaleX = computeGameCanvasScaleX();
+        if (gameCanvasScaleX < 0.999f) {
+            float cx = stageL + stageW * 0.5f;
+            Matrix.translateM(stagePreTransform, 0, cx, 0f, 0f);
+            Matrix.scaleM(stagePreTransform, 0, gameCanvasScaleX, 1f, 1f);
+            Matrix.translateM(stagePreTransform, 0, -cx, 0f, 0f);
+            stagePreTransformActive = true;
+        }
 
-        // When exiting the intro/hold/pre-music state on this frame, snapshot the
-        // audio playhead as a reference.  Subtracting this reference from
-        // every subsequent musicPos reading makes the first real chart frame
-        // start at t≈0 regardless of whether the audio was unpaused by
-        // maybeAutoResumeAfterIntro() (restart) or by PlayActivity (initial
-        // start), and without any hard t=0 discontinuity.
+        // When exiting the intro/hold/pre-music state, reset only the render-side smoother.
         final boolean justExitedIntro = (!inIntro && wasInIntro);
         if (justExitedIntro) {
-            musicReferenceAtIntroExit = musicPos;
             smoothClockInit = false;
             isMusicStartedFlag = true;
         }
@@ -2819,23 +2933,10 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
         double t;
         if (blockGameplayForTransition) {
             // during enter/hold/exit, chart time is clamped to 0
-            t = Math.max(0.0, musicPos - musicReferenceAtIntroExit
-                              - chart.offset - userOffsetSec);
+            t = Math.max(0.0, musicPos - chart.offset - userOffsetSec);
         } else {
-            t = musicPos - musicReferenceAtIntroExit
-                - chart.offset - userOffsetSec;
+            t = musicPos - chart.offset - userOffsetSec;
         }
-
-        if (texBackgroundBlur != null) {
-            drawTextureCover(texBackgroundBlur, stageL, stageT, stageW, stageH, 1.0f, true, 1f, 1f, 1f, frameGlobalAlpha);
-        } else if (texBackground != null) {
-            drawTextureCover(texBackground, stageL, stageT, stageW, stageH, 1.0f, false, 1f, 1f, 1f, frameGlobalAlpha);
-        } else {
-            drawSolidRect(stageL, stageT, stageW, stageH, 0f, 0f, 0f, frameGlobalAlpha);
-        }
-
-        float dimAlpha = computeBackgroundDimAlpha();
-        drawSolidRect(stageL, stageT, stageW, stageH, 0f, 0f, 0f, dimAlpha);
 
         updateGameplay(t);
 
@@ -2843,6 +2944,7 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
         final List<JudgeLine> lines = chart.judgeLineList;
         final float noteWidthBase0 = stageW * 0.1234375f * keyScale;
         final float stageAspect = (stageH > 1e-6f) ? (stageW / stageH) : (16f / 9f);
+        final boolean isOfficialFormat = chart != null && chart.formatVersion > 0;
 
         final float noteCullL = stageL - stageW / 12f;
         final float noteCullT = stageT - stageH / 12f;
@@ -2861,12 +2963,7 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
             }
         }
 
-        // During intro only, draw the official fake judgment line at the center.
-        // Outro has no fake line; real chart lines continue to render.
-        // Real lines are hidden (alpha=0) — only the fake line animates.
-
         if (inIntro) {
-            // Draw fake judgment line at center of stage (fakeJudgeline)
             drawFakeJudgeLine(frameIntroLineScale);
         } else if (lines != null) {
             // Normal gameplay: draw real chart judgment lines
@@ -2921,6 +3018,10 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
 
                     double beatt = line.sec2beat(t);
                     double lineFp = EventUtils.getFloorPosition(beatt, line.speedEvents);
+                    computeLineVisibleRange(st, tmpVisibleRange);
+                    float visibleMin = tmpVisibleRange[0];
+                    float visibleMax = tmpVisibleRange[1];
+                    float visiblePad = stageW * 2.0f;
 
                     int invisibleCount = 0;
                     for (int nIdx = line.loopStartIndex; nIdx < line.notes.size(); nIdx++) {
@@ -2946,7 +3047,7 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
                         float visualFp = baseFpWithCtrl + transYPx;
                         float signedLength = applyYControlScale((float) (note.holdLength * stageH * speedForHoldBody), yCtrl);
 
-                        float noteAlpha = computeNoteRenderAlpha(note.alpha, lineAlphaRaw, note.isAbove, (chart != null && chart.formatVersion > 0));
+                        float noteAlpha = computeNoteRenderAlpha(note.alpha, lineAlphaRaw, note.isAbove, isOfficialFormat);
                         //: hold notes with speed === 0 are hidden
                         if (note.isHold && note.speed == 0.0) noteAlpha = 0f;
                         noteAlpha *= frameGlobalAlpha;
@@ -3035,12 +3136,10 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
                             continue;
                         }
 
-                        computeLineVisibleRange(st, tmpVisibleRange);
-                        float pad = stageW * 2.0f;
                         float hMin = Math.min(drawHeadFp, drawTailFp);
                         float hMax = Math.max(drawHeadFp, drawTailFp);
 
-                        if (hMax < tmpVisibleRange[0] - pad || hMin > tmpVisibleRange[1] + pad) {
+                        if (hMax < visibleMin - visiblePad || hMin > visibleMax + visiblePad) {
                             invisibleCount++;
                             if (invisibleCount > 50) break;
                             continue;
@@ -3048,12 +3147,7 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
                         invisibleCount = 0;
 
                         HoldUv holdUv = getHoldUv(note.morebets);
-                        float widthScale = 1.0f;
-                        Texture normalHeadTex = getNoteHeadTextureSameType(note.type, 0);
-                        Texture mhHeadTex = getNoteHeadTextureSameType(note.type, 1);
-                        if (note.morebets == 1 && normalHeadTex != null && mhHeadTex != null && normalHeadTex.width > 0) {
-                            widthScale = (float) mhHeadTex.width / (float) normalHeadTex.width;
-                        }
+                        float widthScale = getNoteWidthScale(note.type, note.morebets);
 
                         float sizeMul = (!Float.isFinite(note.size) || note.size == 0f) ? 1f : note.size;
                         float xScaleMul = (!Float.isFinite(note.xScale) || note.xScale == 0f) ? 1f : note.xScale;
@@ -3236,21 +3330,19 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
 
                     double beatt = line.sec2beat(t);
                     double lineFp = EventUtils.getFloorPosition(beatt, line.speedEvents);
+                    computeLineVisibleRange(st, tmpVisibleRange);
+                    float visibleMin = tmpVisibleRange[0];
+                    float visibleMax = tmpVisibleRange[1];
+                    float visiblePad = stageW * 2.0f;
 
                     int invisibleCount = 0;
                     for (int nIdx = line.loopStartIndex; nIdx < line.notes.size(); nIdx++) {
                         Note note = line.notes.get(nIdx);
-                        
-                        Texture noteHTex;
                         if (note.isHold) {
-                            noteHTex = (note.morebets == 1) ? texHoldMh : texHold;
-                        } else {
-                            noteHTex = getNoteHeadTexture(note);
+                            continue;
                         }
+                        Texture noteHTex = getNoteHeadTexture(note);
                         if (noteHTex != currentHeadTex) continue;
-
-                        // Hold heads are now rendered in the body pass (hold body + head are a single container). Skip holds here.
-                        if (note.isHold) continue;
 
                         if (note.judgeResult == JR_PERFECT || note.judgeResult == JR_GOOD) continue;
                         if (note.judgeResult == JR_BAD || note.judgeResult == JR_MISS) continue;
@@ -3273,12 +3365,12 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
                         float baseFpWithCtrl = applyYControlScale(baseFpPx, yCtrl);
                         float visualFp = baseFpWithCtrl + transYPx;
 
-                        if ((chart != null && chart.formatVersion > 0) && !note.isHold && note.sect > t && visualFp < -0.001f) {
+                        if (isOfficialFormat && note.sect > t && visualFp < -0.001f) {
                             invisibleCount = 0;
                             continue;
                         }
 
-                        float noteAlpha = computeNoteRenderAlpha(note.alpha, lineAlphaRaw, note.isAbove, (chart != null && chart.formatVersion > 0));
+                        float noteAlpha = computeNoteRenderAlpha(note.alpha, lineAlphaRaw, note.isAbove, isOfficialFormat);
                         //: hold notes with speed === 0 are hidden
                         if (note.isHold && note.speed == 0.0) noteAlpha = 0f;
                         noteAlpha *= frameGlobalAlpha;
@@ -3307,21 +3399,14 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
                             continue;
                         }
 
-                        computeLineVisibleRange(st, tmpVisibleRange);
-                        float pad = stageW * 2.0f;
-                        if (visualFp < tmpVisibleRange[0] - pad || visualFp > tmpVisibleRange[1] + pad) {
+                        if (visualFp < visibleMin - visiblePad || visualFp > visibleMax + visiblePad) {
                             invisibleCount++;
                             if (invisibleCount > 50) break;
                             continue;
                         }
                         invisibleCount = 0;
 
-                        float widthS = 1.0f;
-                        Texture normalHeadT = getNoteHeadTextureSameType(note.type, 0);
-                        Texture mhHeadT = getNoteHeadTextureSameType(note.type, 1);
-                        if (note.morebets == 1 && normalHeadT != null && mhHeadT != null && normalHeadT.width > 0) {
-                            widthS = (float) mhHeadT.width / (float) normalHeadT.width;
-                        }
+                        float widthS = getNoteWidthScale(note.type, note.morebets);
 
                         float sizeM = (!Float.isFinite(note.size) || note.size == 0f) ? 1f : note.size;
                         float xScaleM = (!Float.isFinite(note.xScale) || note.xScale == 0f) ? 1f : note.xScale;
@@ -3367,7 +3452,8 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
 
 
         
-        if (autoplay || replayPlayback) drawClickEffects(t);
+        // Replay uses recorded judge events to mirror manual hit effect timing.
+        if (autoplay && !replayPlayback) drawClickEffects(t);
         drawBadEffects(t);
         drawHitEffects(t);
 
@@ -3378,6 +3464,9 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
         }
 
         inStageSpace = false;
+        if (stagePreTransformActive) {
+            computeStageRect(false);
+        }
     }
 
     /** Debug overlay: colored rectangles at judge line/note positions. Lines=violet, Notes=lime. */
@@ -3514,6 +3603,10 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
         // RePhiEdit / some editors store alpha in 0..255 or even negative packed values.
         if (a > 1.5f || a < -2.5f) a = a / 255f;
         return MathUtils.clamp(a, 0f, 1f);
+    }
+
+    static boolean isHitJudgement(int judgement) {
+        return judgement == JR_PERFECT || judgement == JR_GOOD;
     }
 
     /** Apply Y control scale. ctrl_obj.y multiplies speed, not the entire noteFp. */
@@ -3684,11 +3777,11 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
     }
 
     /**
-     * fakeJudgeline: a single decorative line drawn at the center
-     * of the stage during intro and exit animations. Real judgment lines are hidden
-     * during these phases — only this fake line is visible.
+     * fakeJudgeline: a single decorative line drawn at the center of the stage.
+     * Official Began.anim uses this object for entry. LevelOver's residual
+     * line collapse is handled separately by scaling GameCanvas.x.
      *
-     * @param scale 0→1 during intro (line extends from center), 1→0 during exit (line shrinks to center)
+     * @param scale 0..1 during intro; the line extends from center.
      */
     private void drawFakeJudgeLine(float scale) {
         if (scale <= 0.001f) return;
@@ -4325,14 +4418,12 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
 
             Paint.FontMetrics fm = hudTextPaint.getFontMetrics();
 
+            float measuredW = measureHudTextWidth(text, legacyCharacterAdvance);
             int w;
             if (trimHoriz) {
-                w = Math.max(1, bounds.width());
-                if (w <= 1) {
-                    w = Math.max(1, (int) Math.ceil(measureHudTextWidth(text, legacyCharacterAdvance)));
-                }
+                w = Math.max(1, (int) Math.ceil(Math.max(bounds.width(), measuredW)));
             } else {
-                w = Math.max(1, (int) Math.ceil(measureHudTextWidth(text, legacyCharacterAdvance)));
+                w = Math.max(1, (int) Math.ceil(measuredW));
             }
 
             int h;
@@ -4382,12 +4473,20 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
         if (text == null || text.isEmpty()) return 0f;
         if (!legacyCharacterAdvance) return hudTextPaint.measureText(text);
 
+        float trackingPx = hudTextPaint.getTextSize() * HUD_LEGACY_TEXT_TRACKING_EM;
+        float spaceAdjustPx = hudTextPaint.getTextSize() * HUD_LEGACY_SPACE_ADVANCE_ADJUST_EM;
         float width = 0f;
         int offset = 0;
         int length = text.length();
+        boolean first = true;
         while (offset < length) {
-            int next = offset + Character.charCount(text.codePointAt(offset));
-            width += hudTextPaint.measureText(text, offset, next);
+            int codePoint = text.codePointAt(offset);
+            int next = offset + Character.charCount(codePoint);
+            if (!first) width += trackingPx;
+            float advance = hudTextPaint.measureText(text, offset, next);
+            if (codePoint == ' ') advance = Math.max(0f, advance + spaceAdjustPx);
+            width += advance;
+            first = false;
             offset = next;
         }
         return width;
@@ -4400,12 +4499,18 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
         }
 
         float cursorX = x;
+        float trackingPx = paint.getTextSize() * HUD_LEGACY_TEXT_TRACKING_EM;
+        float spaceAdjustPx = paint.getTextSize() * HUD_LEGACY_SPACE_ADVANCE_ADJUST_EM;
         int offset = 0;
         int length = text.length();
         while (offset < length) {
-            int next = offset + Character.charCount(text.codePointAt(offset));
+            int codePoint = text.codePointAt(offset);
+            int next = offset + Character.charCount(codePoint);
             canvas.drawText(text, offset, next, cursorX, y, paint);
-            cursorX += paint.measureText(text, offset, next);
+            float advance = paint.measureText(text, offset, next);
+            if (codePoint == ' ') advance = Math.max(0f, advance + spaceAdjustPx);
+            cursorX += advance;
+            if (next < length) cursorX += trackingPx;
             offset = next;
         }
     }
@@ -4490,7 +4595,7 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
             }
             if (hudTexComboLabel == null || hudComboLabelText == null || !hudComboLabelText.equals(comboLabel)) {
                 deleteGlTexture(hudTexComboLabel);
-                hudTexComboLabel = createHudTextTexture(comboLabel, comboLabelPx, false, false, true, true);
+                hudTexComboLabel = createHudTextTexture(comboLabel, comboLabelPx, false, false, true, true, false, false, true);
                 hudComboLabelText = comboLabel;
             }
         } else {
@@ -5013,7 +5118,7 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
         Matrix.rotateM(tmpModel, 0, rotationDeg, 0f, 0f, 1f);
         Matrix.scaleM(tmpModel, 0, w, h, 1f);
 
-        if (inStageSpace && mirrorX) {
+        if (inStageSpace && stagePreTransformActive) {
             Matrix.multiplyMM(tmpWorld, 0, stagePreTransform, 0, tmpModel, 0);
             Matrix.multiplyMM(tmpMvp, 0, proj, 0, tmpWorld, 0);
         } else {
@@ -5126,7 +5231,7 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
         // Temporarily switch projection + virtual screen size to match dst
         int oldW = viewW;
         int oldH = viewH;
-        float[] savedProj = proj.clone();
+        System.arraycopy(proj, 0, tmpSavedProj, 0, 16);
 
         viewW = dst.w;
         viewH = dst.h;
@@ -5139,14 +5244,14 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
         GLES20.glClearColor(0f, 0f, 0f, 1f);
         GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT);
 
-        // Keep the same orientation as in normal gameplay rendering.
-        drawFullscreenTextureBackground(texBackground, 1f, 1f, 1f, 1f);
+        // Keep the same center-cover crop used by gameplay/background RawImages.
+        drawTextureCover(texBackground, 0f, 0f, (float) viewW, (float) viewH, 1f, false, 1f, 1f, 1f, 1f);
 
         // restore
         GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0);
         viewW = oldW;
         viewH = oldH;
-        System.arraycopy(savedProj, 0, proj, 0, 16);
+        System.arraycopy(tmpSavedProj, 0, proj, 0, 16);
         GLES20.glViewport(0, 0, oldW, oldH);
     }
 
@@ -5225,6 +5330,59 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
         return replayRecordNowChartTimeSec();
     }
 
+    private void activateHoldAfterHead(@NonNull Note n, boolean perfect, double triggerTimeSec, double diffSec) {
+        n.holdActive = true;
+        n.holdPerfect = perfect;
+        n.holdPreJudge = false;
+        n.holdUpTimeSec = Double.POSITIVE_INFINITY;
+        n.holdDiffSec = diffSec;
+        n.safeFrame = HOLD_SAFE_FRAME_INIT;
+        n.holdFxAtSec = firstHoldBodyEffectTimeSec(n, triggerTimeSec);
+        n.clicked = true;
+        n.holdTapTimeMs = System.nanoTime() / 1_000_000L;
+        n.holdBroken = false;
+
+        // Official HoldControl.NoteMove keeps producing body effects after the
+        // head hit. HoldControl.Judge only handles the later score settlement.
+    }
+
+    private double getHoldBodyEffectIntervalSec(@NonNull Note n) {
+        JudgeLine line = n.master;
+        double bpm = (line != null && line.bpm > 0.0) ? line.bpm : 120.0;
+        return HOLD_PARTICLE_INTERVAL_BEATS * 60.0 / bpm;
+    }
+
+    private double firstHoldBodyEffectTimeSec(@NonNull Note n, double triggerTimeSec) {
+        double interval = getHoldBodyEffectIntervalSec(n);
+        if (!Double.isFinite(interval) || interval <= 0.0) return Double.POSITIVE_INFINITY;
+        double firstDue = n.sect + interval;
+        return triggerTimeSec > firstDue ? triggerTimeSec : firstDue;
+    }
+
+    private void spawnDueHoldBodyHitEffects(@NonNull Note n, double tChart) {
+        if (!n.holdActive || n.judgeResult >= 0) return;
+        double interval = getHoldBodyEffectIntervalSec(n);
+        if (!Double.isFinite(interval) || interval <= 0.0) {
+            n.holdFxAtSec = Double.POSITIVE_INFINITY;
+            return;
+        }
+        if (!Double.isFinite(n.holdFxAtSec)) {
+            n.holdFxAtSec = tChart + interval;
+        }
+
+        while (tChart >= n.holdFxAtSec) {
+            double effectTimeSec = n.holdFxAtSec;
+            if (effectTimeSec >= n.sect && effectTimeSec < n.holdEndTime) {
+                if (n.holdPerfect) {
+                    spawnHoldBodyHitEffect(n, effectTimeSec, skinPColor[0], skinPColor[1], skinPColor[2], skinPAlpha, 4);
+                } else {
+                    spawnHoldBodyHitEffect(n, effectTimeSec, skinGColor[0], skinGColor[1], skinGColor[2], skinGAlpha, 3);
+                }
+            }
+            n.holdFxAtSec += interval;
+        }
+    }
+
     private void updateAutoplay(double tChart) {
         List<Note> notes = chart.allNotesSorted;
         while (autoNoteIndex < notes.size()) {
@@ -5233,17 +5391,8 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
                 if (n.judgeResult < 0) {
                     if (n.type == GameConstants.NOTE_HOLD) {
                         NativeAudioEngine.triggerSfx(GameConstants.NOTE_TAP);
-                        n.holdActive = true;
-                        n.holdPerfect = true;
-                        n.holdPreJudge = false;
-                        n.holdUpTimeSec = Double.POSITIVE_INFINITY;
-                        n.holdDiffSec = 0.0;
-                        n.safeFrame = HOLD_SAFE_FRAME_INIT;
-                        JudgeLine ml = n.master;
-                        double bpm0 = (ml != null && ml.bpm > 0) ? ml.bpm : 120.0;
-                        double interval0 = (HOLD_PARTICLE_INTERVAL_BEATS * 60.0 / bpm0) / Math.max(0.001f, musicSpeed);
-                        n.holdFxAtSec = tChart + interval0;
-                        n.clicked = true;
+                        activateHoldAfterHead(n, true, n.sect, 0.0);
+                        spawnHoldHeadHitEffect(n, n.sect, skinPColor[0], skinPColor[1], skinPColor[2], skinPAlpha, 4);
                     } else {
                         commitJudgement(n, JR_PERFECT, tChart - n.sect);
                     }
@@ -5260,22 +5409,9 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
             if (!n.holdActive) continue;
             if (n.judgeResult >= 0) continue;
 
-            JudgeLine masterLine = n.master;
-            double bpm = (masterLine != null && masterLine.bpm > 0) ? masterLine.bpm : 120.0;
-            double interval = (HOLD_PARTICLE_INTERVAL_BEATS * 60.0 / bpm) / Math.max(0.001f, musicSpeed);
+            spawnDueHoldBodyHitEffects(n, tChart);
 
-            if (!Double.isFinite(n.holdFxAtSec)) n.holdFxAtSec = tChart + interval;
-
-            // Note: In autoplay mode, hold particle effects are already covered by
-            // chart.clickEffectsSorted (pre-generated in Chart.initSort with the same
-            // 30/BPM interval). drawClickEffects() renders them at Line 2450.
-            // We must NOT spawn duplicate HitEffects here, otherwise drawHitEffects()
-            // at Line 2452 would render a second set of effects, making visuals too "thick".
-            while (tChart >= n.holdFxAtSec && n.holdFxAtSec <= n.holdEndTime) {
-                n.holdFxAtSec += interval;
-            }
-
-            if (tChart >= n.holdEndTime) {
+            if (tChart >= n.holdEndTime - HOLD_TAIL_EARLY_SETTLE) {
                 n.holdActive = false;
                 n.holdPreJudge = false;
                 commitJudgement(n, JR_PERFECT, 0.0);
@@ -5314,38 +5450,22 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
                     if (n.judgeResult < 0) {
                         if (n.type == GameConstants.NOTE_HOLD) {
                             if (re.t == ReplayData.TYPE_HOLD_PRESS) {
-                                if (!n.holdActive) {
-                                    n.holdActive = true;
-                                    n.holdPerfect = (re.j == 0);
-                                    n.holdPreJudge = false;
-                                    n.holdUpTimeSec = Double.POSITIVE_INFINITY;
-                                    n.holdDiffSec = re.ts - n.sect;
-                                    n.safeFrame = 2;
-                                    JudgeLine ml = n.master;
-                                    double bpm0 = (ml != null && ml.bpm > 0) ? ml.bpm : 120.0;
-                                    double interval0 = (0.5 * 60.0 / bpm0) / Math.max(0.001f, musicSpeed);
-                                    n.holdFxAtSec = (n.holdEndTime - re.ts >= 1.5 * interval0)
-                                            ? re.ts + interval0
-                                            : Double.POSITIVE_INFINITY;
-                                    n.clicked = true;
-                                    n.holdTapTimeMs = System.nanoTime() / 1_000_000L;
-                                    n.holdBroken = false;
+                                if (!n.holdActive && isHitJudgement(re.j)) {
+                                    activateHoldAfterHead(n, re.j == 0, re.ts, re.ts - n.sect);
                                     NativeAudioEngine.triggerSfx(GameConstants.NOTE_TAP);
                                     if (re.j == 0) {
                                         spawnHoldHeadHitEffect(n, re.ts, skinPColor[0], skinPColor[1], skinPColor[2], skinPAlpha, 4);
                                     } else {
-                                        spawnHoldHeadHitEffect(n, re.ts, skinGColor[0], skinGColor[1], skinGColor[2], skinGAlpha, 3,
-                                                re.ts < n.sect);
+                                        spawnHoldHeadHitEffect(n, re.ts, skinGColor[0], skinGColor[1], skinGColor[2], skinGAlpha, 3);
                                     }
                                 }
                             } else {
                                 // HOLD_RELEASE
                                 if (re.j == JR_PERFECT || re.j == JR_GOOD) {
                                     n.holdPreJudge = true;
-                                    // keep holdActive=true so drawClickEffects continues
-                                    // drawing body effects until holdEndTime.
-                                    // holdPerfect is kept as-is from HOLD_PRESS
-                                    // so body effect colors match the head judgment.
+                                    // Keep holdActive=true until the official
+                                    // hold settlement window is reached.
+                                    // holdPerfect is kept as-is from HOLD_PRESS.
                                 } else {
                                     n.holdActive = false;
                                     n.holdPreJudge = false;
@@ -5366,18 +5486,9 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
         for (Note n : notes) {
             if (n == null || n.type != GameConstants.NOTE_HOLD) continue;
             if (!n.holdActive || n.judgeResult >= 0) continue;
-            JudgeLine masterLine = n.master;
-            double bpm = (masterLine != null && masterLine.bpm > 0) ? masterLine.bpm : 120.0;
-            double interval = (0.5 * 60.0 / bpm) / Math.max(0.001f, musicSpeed);
-            if (!Double.isFinite(n.holdFxAtSec)) n.holdFxAtSec = tChart + interval;
-            while (tChart >= n.holdFxAtSec && n.holdFxAtSec <= n.holdEndTime) {
-                n.holdFxAtSec += interval;
-            }
+            spawnDueHoldBodyHitEffects(n, tChart);
             // holdPreJudge is set by PERFECT/GOOD HOLD_RELEASE.
-            // drawClickEffects continues drawing body effects past this
-            // point (see judgeResult check there) — so we finalize
-            // only when holdEndTime is reached.
-            if (n.holdPreJudge && tChart >= n.holdEndTime) {
+            if (n.holdPreJudge && tChart >= n.holdEndTime - HOLD_TAIL_EARLY_SETTLE) {
                 n.holdActive = false;
                 n.holdPreJudge = false;
                 commitJudgement(n, n.holdPerfect ? JR_PERFECT : JR_GOOD, n.holdDiffSec);
@@ -5392,7 +5503,7 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
      * 3. Drag judgment (continuous touch matching)
      * 4. Flick judgment (gesture matching + nearNotes)
      * 5. Tap/Hold settlement
-     * 6. Hold particles
+     * 6. Hold tail pre-judge
      * 7. Hold tail finalization
      * 8. Miss detection
      */
@@ -5537,6 +5648,9 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
                 if (bestNote.type != GameConstants.NOTE_FLICK) {
                     bestNote.isJudged = true;
                 }
+                if (bestNote.type == GameConstants.NOTE_DRAG) {
+                    bestNote.dragPrimed = true;
+                }
             }
         }
         } catch (Throwable t) { /* prevent crash */ }
@@ -5568,21 +5682,20 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
             // Phigros: early window = badTimeRange, late Miss at 0.1s
             if (deltaTime > limitBad) continue;
 
-            // Per-frame: reset PreJudge, recalculate based on current frame's touches
-            note.preJudge = false;
+            // Official DragControl ORs persisted CheckNote/DragControl state back in every frame.
+            note.preJudge = note.preJudge || note.isJudged || note.dragPrimed;
 
             // Drag isJudged: any continuous touch (type 2) within Phigros range (touchPos < 2.1)
             // Phigros: DragControl matching only within |delta| <= 0.1
             double absDragDelta = Math.abs(deltaTime);
-            if (absDragDelta > 0.1) {
-                note.preJudge = false;
-            } else {
+            if (!note.preJudge && absDragDelta <= 0.1) {
                 for (JudgeEvent je : judgeList) {
                     if (je.type != 2) continue;
                     float touchPos = getPhigrosTouchPos(je.offsetX, je.offsetY, note, tChart, stageAspect);
                     if (touchPos < 2.1f) {
                         note.preJudge = true;
                         note.dragPrimed = true;
+                        note.isJudged = true;
                         break;
                     }
                 }
@@ -5791,23 +5904,7 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
                         commitJudgement(note, JR_PERFECT, deltaTime);
                     } else {
                         // Hold head: activate hold
-                        note.holdActive = true;
-                        note.holdPerfect = true;
-                        note.holdPreJudge = false;
-                        note.holdUpTimeSec = Double.POSITIVE_INFINITY;
-                        note.holdDiffSec = deltaTime;
-                        note.safeFrame = HOLD_SAFE_FRAME_INIT;
-                        JudgeLine masterLine0 = note.master;
-                        double bpm0 = (masterLine0 != null && masterLine0.bpm > 0) ? masterLine0.bpm : 120.0;
-                        double interval0 = (HOLD_PARTICLE_INTERVAL_BEATS * 60.0 / bpm0) / Math.max(0.001f, musicSpeed);
-                        // Only schedule body effects if, after the first interval
-                        // delay, at least one more full interval remains.
-                        note.holdFxAtSec = (note.holdEndTime - tChart >= 1.5 * interval0)
-                                ? tChart + interval0
-                                : Double.POSITIVE_INFINITY;
-                        note.clicked = true;
-                        note.holdTapTimeMs = System.nanoTime() / 1_000_000L;
-                        note.holdBroken = false;
+                        activateHoldAfterHead(note, true, tChart, deltaTime);
                         if (holdHeadSpawned.add(note)) {
                             spawnHoldHeadHitEffect(note, tChart, skinPColor[0], skinPColor[1], skinPColor[2], skinPAlpha, 4);
                         }
@@ -5833,24 +5930,9 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
                         commitJudgement(note, JR_GOOD, deltaTime);
                     } else {
                         // Hold head: Good → holdPerfect = false
-                        note.holdActive = true;
-                        note.holdPerfect = false;
-                        note.holdPreJudge = false;
-                        note.holdUpTimeSec = Double.POSITIVE_INFINITY;
-                        note.holdDiffSec = deltaTime;
-                        note.safeFrame = HOLD_SAFE_FRAME_INIT;
-                        JudgeLine masterLine0 = note.master;
-                        double bpm0 = (masterLine0 != null && masterLine0.bpm > 0) ? masterLine0.bpm : 120.0;
-                        double interval0 = (HOLD_PARTICLE_INTERVAL_BEATS * 60.0 / bpm0) / Math.max(0.001f, musicSpeed);
-                        note.holdFxAtSec = (note.holdEndTime - tChart >= 1.5 * interval0)
-                                ? tChart + interval0
-                                : Double.POSITIVE_INFINITY;
-                        note.clicked = true;
-                        note.holdTapTimeMs = System.nanoTime() / 1_000_000L;
-                        note.holdBroken = false;
+                        activateHoldAfterHead(note, false, tChart, deltaTime);
                         if (holdHeadSpawned.add(note)) {
-                            spawnHoldHeadHitEffect(note, tChart, skinGColor[0], skinGColor[1], skinGColor[2], skinGAlpha, 3,
-                                    deltaTime > 0.0);
+                            spawnHoldHeadHitEffect(note, tChart, skinGColor[0], skinGColor[1], skinGColor[2], skinGAlpha, 3);
                         }
                         // Record HOLD_PRESS immediately so short holds aren't missed
                         if (replayRecording && replayRecorderData != null) {
@@ -5885,59 +5967,27 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
             if (!note.isJudged && !note.holdActive && note.judgeResult < 0) {
                 // Phigros: ClickControl — delta < -badTimeRange → Miss
                 // (note more than badTimeRange past due without activation)
-                if (deltaTime < -limitBad) {
+                if (deltaTime < -getLateMissLimitSec(note)) {
                     commitJudgement(note, JR_MISS, 0.25);
                 }
             }
         }
         } catch (Throwable t) { /* prevent crash */ }
 
-        // ---- Phase 6: Hold particles and tail pre-judge ----
-        // Note: Hold body check (holdBroken) is now in Phase 5 (ClickControl)
+        // ---- Phase 6: Hold tail pre-judge ----
+        // Note: hold continuity is checked in Phase 5. HoldControl.NoteMove also
+        // emits body hit effects before HoldControl.Judge settles the tail.
         try {
         for (int i = 0; i < nSize; i++) {
             Note n = notes.get(i);
             if (n == null || !n.holdActive || n.judgeResult >= 0) continue;
 
             if (!n.clicked && tChart >= n.sect) n.clicked = true;
-
-            JudgeLine masterLine = n.master;
-            double bpm = (masterLine != null && masterLine.bpm > 0) ? masterLine.bpm : 120.0;
-            double interval = (HOLD_PARTICLE_INTERVAL_BEATS * 60.0 / bpm) / Math.max(0.001f, musicSpeed);
-
-            if (!Double.isFinite(n.holdFxAtSec)) n.holdFxAtSec = tChart + interval;
-
-            while (tChart >= n.holdFxAtSec) {
-                if (n.holdFxAtSec + interval * 0.5 <= n.holdEndTime) {
-                    if (n.holdPerfect) {
-                        spawnHitEffect(n, n.holdFxAtSec, skinPColor[0], skinPColor[1], skinPColor[2], skinPAlpha, 4);
-                    } else {
-                        spawnHitEffect(n, n.holdFxAtSec, skinGColor[0], skinGColor[1], skinGColor[2], skinGAlpha, 3);
-                    }
-                }
-                n.holdFxAtSec += interval;
-            }
+            spawnDueHoldBodyHitEffects(n, tChart);
 
             // Hold tail pre-judge
             if ((n.holdEndTime - tChart) / spd <= limitBad) {
                 n.holdPreJudge = true;
-            }
-
-            // When the hold is about to be finalized (within early-settle window),
-            // spawn remaining body effects up to holdEndTime so the tail is visually
-            // covered — matching AUTOPLAY's pre-generated ClickEffectItems that span
-            // the full hold duration. Holds shorter than one particle interval are
-            // skipped (holdFxAtSec was set to +Inf in Phase 5).
-            if (n.holdPreJudge && Double.isFinite(n.holdFxAtSec)
-                    && tChart >= n.holdEndTime - HOLD_TAIL_EARLY_SETTLE) {
-                while (n.holdFxAtSec + interval * 0.5 <= n.holdEndTime) {
-                    if (n.holdPerfect) {
-                        spawnHitEffect(n, n.holdFxAtSec, skinPColor[0], skinPColor[1], skinPColor[2], skinPAlpha, 4);
-                    } else {
-                        spawnHitEffect(n, n.holdFxAtSec, skinGColor[0], skinGColor[1], skinGColor[2], skinGAlpha, 3);
-                    }
-                    n.holdFxAtSec += interval;
-                }
             }
         }
         } catch (Throwable t) { /* prevent crash */ }
@@ -6072,37 +6122,6 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
         return (Math.abs(noteLocalX - touchLocalX) + Math.abs(touchLocalY)) / ja;
     }
 
-    /** Check if touch is near the judge line vertically (Y-distance) */
-    private boolean isTouchNearLine(float touchX, float touchY, Note note, double tChart, float stageAspect) {
-        JudgeLine line = note.master;
-        if (line == null) return false;
-        JudgeLine.StateHolder st = line.fillState(tChart, stageAspect);
-        if (st == null) return false;
-        float lineX = stageL + st.xNorm * stageW;
-        float lineY = stageT + st.yNorm * stageH;
-        float lineRot = st.rotateDeg;
-        double rad = lineRot * Math.PI / 180.0;
-        float cosLine = (float) Math.cos(rad);
-        float sinLine = (float) Math.sin(rad);
-        float touchLocalY = toLineLocalY(touchX, touchY, lineX, lineY, cosLine, sinLine);
-        return Math.abs(touchLocalY) <= JUDGE_LINE_Y_TOLERANCE;
-    }
-
-    private void statDisp(double offset) {
-        // Track judgment offset for statistics display (Early/Late)
-        // Similar to's stat.addDisp
-    }
-
-    private float toScreenLocalX(float x) {
-        int w = viewW <= 1 ? 1 : viewW;
-        return x / (float) w * 2f - 1f;
-    }
-
-    private float toScreenLocalY(float y) {
-        int h = viewH <= 1 ? 1 : viewH;
-        return y / (float) h * 2f - 1f;
-    }
-
     private float toLineLocalX(float touchX, float touchY,
                                float lineX, float lineY,
                                float cosLine, float sinLine) {
@@ -6161,27 +6180,23 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
         hitEffects.add(new HitEffect((float) (visualTimeSec - lag), tmpNotePos[0], tmpNotePos[1], r, g, b, a, numOfParts, lineRotOut[0]));
     }
 
-    /**
-     * Hold head hit effect follows official behavior: early Good appears at the
-     * current Hold head position; Perfect, late Good, and on-time Good use the judge line.
-     */
     private void spawnHoldHeadHitEffect(@NonNull Note note, double timeSec, float r, float g, float b, float a, int numOfParts) {
-        spawnHoldHeadHitEffect(note, timeSec, r, g, b, a, numOfParts, false);
-    }
-
-    private void spawnHoldHeadHitEffect(@NonNull Note note, double timeSec, float r, float g, float b, float a, int numOfParts, boolean earlyGood) {
         if (texHitFx == null || texWhite == null) return;
 
-        if (earlyGood && note.sect > timeSec) {
+        if (timeSec > note.sect) {
+            if (!computeNoteHeadPositionOnLine(note, timeSec, tmpNotePos, lineRotOut)) return;
+        } else {
             if (!computeNoteHeadPosition(note, timeSec, tmpNotePos)) return;
             getLineRotDeg(note, timeSec, lineRotOut);
-        } else {
-            if (!computeNoteHeadPositionOnLine(note, timeSec, tmpNotePos, lineRotOut)) return;
         }
 
         double spd = Math.max(0.001f, musicSpeed);
         double lag = Math.max(0.0, (frameChartTimeSec - timeSec) / spd);
         hitEffects.add(new HitEffect((float) (visualTimeSec - lag), tmpNotePos[0], tmpNotePos[1], r, g, b, a, numOfParts, lineRotOut[0]));
+    }
+
+    private void spawnHoldBodyHitEffect(@NonNull Note note, double timeSec, float r, float g, float b, float a, int numOfParts) {
+        spawnHitEffect(note, timeSec, r, g, b, a, numOfParts);
     }
 
     private void getLineRotDeg(@NonNull Note note, double tChart, @NonNull float[] outRotDeg) {
@@ -6430,36 +6445,44 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
         double rad = Math.toRadians(rotationDeg);
         float cos = (float) Math.cos(rad);
         float sin = (float) Math.sin(rad);
+        float tlx = -hw * cos + hh * sin;
+        float tly = -hw * sin - hh * cos;
+        float trx =  hw * cos + hh * sin;
+        float try_ = hw * sin - hh * cos;
+        float blx = -hw * cos - hh * sin;
+        float bly = -hw * sin + hh * cos;
+        float brx =  hw * cos - hh * sin;
+        float bry =  hw * sin + hh * cos;
 
-        // 4 corners: TL, TR, BL, BR
-        float[][] corners = {
-            {-hw, -hh}, {hw, -hh}, {-hw, hh}, {hw, hh}
-        };
         // Per-quad UV swap (u0↔u1) mirrors the texture without shifting
         // spritesheet frame columns — unlike the shader-level vTex.x flip.
-        float[][] uvs;
         if (batchFlipUv) {
-            uvs = new float[][]{{u1, v0}, {u0, v0}, {u1, v1}, {u0, v1}};
-        } else {
-            uvs = new float[][]{{u0, v0}, {u1, v0}, {u0, v1}, {u1, v1}};
+            float tmp = u0;
+            u0 = u1;
+            u1 = tmp;
         }
 
-        // Two triangles: (0, 1, 2) and (1, 2, 3)
-        int[] indices = {0, 1, 2, 1, 2, 3};
-
-        for (int idx : indices) {
-            float rx = corners[idx][0] * cos - corners[idx][1] * sin;
-            float ry = corners[idx][0] * sin + corners[idx][1] * cos;
-            batchBuffer.put(cx + rx);
-            batchBuffer.put(cy + ry);
-            batchBuffer.put(uvs[idx][0]);
-            batchBuffer.put(uvs[idx][1]);
-            batchBuffer.put(r);
-            batchBuffer.put(g);
-            batchBuffer.put(b);
-            batchBuffer.put(a);
-        }
+        // Two triangles: (TL, TR, BL) and (TR, BL, BR).
+        putBatchVertex(cx + tlx, cy + tly, u0, v0, r, g, b, a);
+        putBatchVertex(cx + trx, cy + try_, u1, v0, r, g, b, a);
+        putBatchVertex(cx + blx, cy + bly, u0, v1, r, g, b, a);
+        putBatchVertex(cx + trx, cy + try_, u1, v0, r, g, b, a);
+        putBatchVertex(cx + blx, cy + bly, u0, v1, r, g, b, a);
+        putBatchVertex(cx + brx, cy + bry, u1, v1, r, g, b, a);
         batchCount++;
+    }
+
+    private void putBatchVertex(float x, float y,
+                                float u, float v,
+                                float r, float g, float b, float a) {
+        batchBuffer.put(x);
+        batchBuffer.put(y);
+        batchBuffer.put(u);
+        batchBuffer.put(v);
+        batchBuffer.put(r);
+        batchBuffer.put(g);
+        batchBuffer.put(b);
+        batchBuffer.put(a);
     }
 
     private void flushBatch(Texture tex) {
@@ -6470,7 +6493,7 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
         }
 
         GLES20.glUseProgram(progBatch);
-        if (inStageSpace && mirrorX) {
+        if (inStageSpace && stagePreTransformActive) {
             Matrix.multiplyMM(tmpBatchProj, 0, proj, 0, stagePreTransform, 0);
             GLES20.glUniformMatrix4fv(locBatchProj, 1, false, tmpBatchProj, 0);
         } else {
@@ -6502,8 +6525,7 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
         batchBuffer.position(0);
     }
 
-    /** Flush batched quads using the non-premultiplied hit-fx shader and
-     *  standard alpha blending. Caller must set the blend mode before calling. */
+    /** Flush batched hit-fx quads. Caller must set premultiplied-alpha blending. */
     private void flushHitFxBatch(Texture tex) {
         if (batchCount == 0 || tex == null) {
             batchCount = 0;
@@ -6512,7 +6534,7 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
         }
 
         GLES20.glUseProgram(progHitFx);
-        if (inStageSpace && mirrorX) {
+        if (inStageSpace && stagePreTransformActive) {
             Matrix.multiplyMM(tmpBatchProj, 0, proj, 0, stagePreTransform, 0);
             GLES20.glUniformMatrix4fv(locHitFxProj, 1, false, tmpBatchProj, 0);
         } else {
@@ -6579,9 +6601,9 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
             }
         }
 
-        // 1. Spritesheet — standard alpha blend with non-premultiplied shader
+        // 1. Spritesheet: premultiplied-alpha shader/blend.
         GLES20.glBlendFuncSeparate(
-                GLES20.GL_SRC_ALPHA, GLES20.GL_ONE_MINUS_SRC_ALPHA,
+                GLES20.GL_ONE, GLES20.GL_ONE_MINUS_SRC_ALPHA,
                 GLES20.GL_ONE, GLES20.GL_ONE_MINUS_SRC_ALPHA);
         for (int i = clickEffectIndex; i < eff.size(); i++) {
             ClickEffectItem item = eff.get(i);
@@ -6612,22 +6634,6 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
             float v1 = (float) (cy + 1) / (float) rows - halfV;
 
             if (item.note == null || item.note.master == null) continue;
-            // Replay: match manual-play hold body effect timing constraints.
-            // Phase 5 short-hold guard (holdFxAtSec=+Inf when remaining < 1.5*interval)
-            // and Phase 6 boundary (last spawn at holdEndTime - 0.5*interval).
-            if (replayPlayback && item.note.type == GameConstants.NOTE_HOLD) {
-                JudgeLine ml2 = item.note.master;
-                double bpm2 = (ml2 != null && ml2.bpm > 0) ? ml2.bpm : 120.0;
-                double interval2 = (0.5 * 60.0 / bpm2) / Math.max(0.001f, musicSpeed);
-                if (item.note.holdEndTime - item.note.sect < 1.5 * interval2) continue;
-                if (item.timeSec + interval2 * 0.5 > item.note.holdEndTime) continue;
-            }
-            // Replay skip policy is handled before animStartCached is set.
-            // Already-started HOLD body effects are allowed to finish naturally.
-            // During replay, commitJudgement/spawnHoldHeadHitEffect already spawn
-            // the note-head effect — skip this duplicate click effect at note.sect
-            if (replayPlayback && Math.abs(item.timeSec - item.note.sect) < 0.001) continue;
-
             float x, y;
             float lineRotDeg;
             if (item.positionCached) {
@@ -6636,7 +6642,7 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
                 lineRotDeg = item.cachedLineRotDeg;
             } else {
                 float stageAspect = (stageH > 1e-6f) ? (stageW / stageH) : (16f / 9f);
-                JudgeLine.StateHolder st = item.note.master.fillState(item.timeSec, stageAspect);
+                JudgeLine.StateHolder st = getHistoricalLineState(item.note.master, item.timeSec, stageAspect);
                 if (st == null) continue;
                 float lineRot = st.rotateDeg;
                 lineRotDeg = lineRot + (item.note.isAbove ? 0f : 180f);
@@ -6689,16 +6695,7 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
             double elapsed = tVis - item.animStartSec;
             if (elapsed < 0.0) continue;
             if (elapsed > dur) continue;
-            // Mirror the skip conditions from the spritesheet pass above
             if (item.note == null || item.note.master == null) continue;
-            if (replayPlayback && item.note.type == GameConstants.NOTE_HOLD) {
-                JudgeLine ml2 = item.note.master;
-                double bpm2 = (ml2 != null && ml2.bpm > 0) ? ml2.bpm : 120.0;
-                double interval2 = (0.5 * 60.0 / bpm2) / Math.max(0.001f, musicSpeed);
-                if (item.note.holdEndTime - item.note.sect < 1.5 * interval2) continue;
-                if (item.timeSec + interval2 * 0.5 > item.note.holdEndTime) continue;
-            }
-            if (replayPlayback && Math.abs(item.timeSec - item.note.sect) < 0.001) continue;
             if (!item.positionCached) continue;
 
             float p = (float) (elapsed / dur);
@@ -6720,8 +6717,9 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
                 float pr = pfColor ? skinPColor[0] : skinGColor[0];
                 float pg = pfColor ? skinPColor[1] : skinGColor[1];
                 float pb = pfColor ? skinPColor[2] : skinGColor[2];
+                float pa = alpha;
                 addQuadToBatch(rx, ry, size, size, 0f,
-                        pr, pg, pb, alpha,
+                        pr, pg, pb, pa,
                         0f, 0f, 1f, 1f);
                 
                 if (batchCount >= MAX_BATCH_QUADS) flushBatch(texWhite);
@@ -6731,9 +6729,24 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
         } // !skinHideParticles
     }
 
+    private JudgeLine.StateHolder getHistoricalLineState(@NonNull JudgeLine line,
+                                                         double chartTimeSec,
+                                                         float stageAspect) {
+        JudgeLine.StateHolder cached = line.lastState;
+        double cachedTime = line.lastStateTimeSec;
+        line.getStateInto(tmpHistoricalLineState, chartTimeSec, stageAspect);
+        line.lastState = cached;
+        line.lastStateTimeSec = cachedTime;
+        return tmpHistoricalLineState;
+    }
+
     private boolean shouldSkipReplayClickEffect(@NonNull ClickEffectItem item) {
-        if (!replayPlayback || item.note == null) return false;
+        if (item.note == null) return false;
         Note note = item.note;
+        if ((autoplay || replayPlayback) && note.type == GameConstants.NOTE_HOLD) {
+            return true;
+        }
+        if (!replayPlayback) return false;
         if (note.type == GameConstants.NOTE_HOLD) {
             if (Math.abs(item.timeSec - note.sect) < 0.001) return true;
             if (item.animStartCached) return false;
@@ -6802,9 +6815,9 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
         }
         if (hitEffects.isEmpty()) return;
 
-        // 1. Spritesheet — standard alpha blend with non-premultiplied shader
+        // 1. Spritesheet: premultiplied-alpha shader/blend.
         GLES20.glBlendFuncSeparate(
-                GLES20.GL_SRC_ALPHA, GLES20.GL_ONE_MINUS_SRC_ALPHA,
+                GLES20.GL_ONE, GLES20.GL_ONE_MINUS_SRC_ALPHA,
                 GLES20.GL_ONE, GLES20.GL_ONE_MINUS_SRC_ALPHA);
         for (int i = 0; i < hitEffects.size(); i++) {
             HitEffect item = hitEffects.get(i);
@@ -6983,10 +6996,101 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
         }
     }
 
+    private void drawOfficialBackgroundClip(Texture tex,
+                                            boolean isFboTexture,
+                                            float clipX,
+                                            float clipY,
+                                            float clipW,
+                                            float clipH,
+                                            float alpha) {
+        if (tex == null || alpha <= 0.001f || clipW <= 0.5f || clipH <= 0.5f) return;
+
+        float dstX = 0f;
+        float dstY = stageT;
+        float dstW = (float) viewW;
+        float dstH = stageH;
+
+        float tw = tex.width > 0 ? (float) tex.width : dstW;
+        float th = tex.height > 0 ? (float) tex.height : dstH;
+        float texAr = tw / Math.max(1f, th);
+        float dstAr = dstW / Math.max(1f, dstH);
+
+        float drawW;
+        float drawH;
+        if (texAr > dstAr) {
+            drawH = dstH;
+            drawW = drawH * texAr;
+        } else {
+            drawW = dstW;
+            drawH = drawW / texAr;
+        }
+
+        float drawX = dstX + (dstW - drawW) * 0.5f;
+        float drawY = dstY + (dstH - drawH) * 0.5f;
+
+        withScreenScissor(clipX, clipY, clipW, clipH,
+                () -> drawTextureTopLeft(tex, drawX, drawY, drawW, drawH, 0f,
+                        1f, 1f, 1f, alpha,
+                        0f, isFboTexture ? 1f : 0f, 1f, isFboTexture ? 0f : 1f));
+    }
+
+    private void drawOfficialSideBackgrounds(float alphaScale) {
+        float leftW = Math.max(0f, stageL);
+        float rightX = Math.min((float) viewW, stageL + stageW);
+        float rightW = Math.max(0f, (float) viewW - rightX);
+        if (!hasHorizontalSideBlanks()) return;
+
+        if (texBackground == null && texBackgroundBlur == null) {
+            drawSolidRect(0f, 0f, (float) viewW, (float) viewH, 0f, 0f, 0f, 1f);
+            return;
+        }
+
+        drawSideVerticalGaps(0f, leftW);
+        drawSideVerticalGaps(rightX, rightW);
+
+        if (alphaScale > 0.001f) {
+            drawOfficialSideBackgroundPanel(0f, leftW, alphaScale);
+            drawOfficialSideBackgroundPanel(rightX, rightW, alphaScale);
+        }
+
+        float dimAlpha = computeSideDimAlpha() * alphaScale;
+        if (dimAlpha > 0.001f) {
+            drawSideDimPanel(0f, leftW, dimAlpha);
+            drawSideDimPanel(rightX, rightW, dimAlpha);
+        }
+    }
+
+    private void drawSideVerticalGaps(float x, float w) {
+        if (w <= 0.5f) return;
+        if (stageT > 0.5f) {
+            drawSolidRect(x, 0f, w, stageT, 0f, 0f, 0f, 1f);
+        }
+        float bottom = stageT + stageH;
+        if (bottom < viewH - 0.5f) {
+            drawSolidRect(x, bottom, w, (float) viewH - bottom, 0f, 0f, 0f, 1f);
+        }
+    }
+
+    private void drawOfficialSideBackgroundPanel(float x, float w, float alpha) {
+        Texture tex = texBackgroundBlur != null ? texBackgroundBlur : texBackground;
+        boolean isFbo = texBackgroundBlur != null;
+        if (tex == null || w <= 0.5f) return;
+
+        drawOfficialBackgroundClip(tex, isFbo, x, stageT, w, stageH, alpha);
+    }
+
+    private void drawSideDimPanel(float x, float w, float alpha) {
+        if (w <= 0.5f) return;
+        drawSolidRect(x, stageT, w, stageH, 0f, 0f, 0f, alpha);
+    }
+
+    private boolean hasHorizontalSideBlanks() {
+        return stageL > 0.5f || stageL + stageW < (float) viewW - 0.5f;
+    }
+
     private boolean isStageFullscreen() {
-        return Math.abs(stageL) < 0.5f
+        return !hasHorizontalSideBlanks()
                 && Math.abs(stageT) < 0.5f
-                && Math.abs(stageW - viewW) < 0.5f
                 && Math.abs(stageH - viewH) < 0.5f;
     }
 
@@ -7030,15 +7134,53 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
         GLES20.glDisable(GLES20.GL_SCISSOR_TEST);
     }
 
+    private void withScreenScissor(float left, float top, float width, float height, Runnable drawAction) {
+        if (drawAction == null) return;
+        if (width <= 0f || height <= 0f) return;
+
+        int sx = Math.round(left * renderScaleX);
+        int sy = Math.round((viewH - (top + height)) * renderScaleY);
+        int sw = Math.round(width * renderScaleX);
+        int sh = Math.round(height * renderScaleY);
+
+        int vw = Math.round(viewW * renderScaleX);
+        int vh = Math.round(viewH * renderScaleY);
+
+        if (sx < 0) {
+            sw += sx;
+            sx = 0;
+        }
+        if (sy < 0) {
+            sh += sy;
+            sy = 0;
+        }
+        if (sx + sw > vw) sw = vw - sx;
+        if (sy + sh > vh) sh = vh - sy;
+        if (sw <= 0 || sh <= 0) return;
+
+        boolean wasEnabled = GLES20.glIsEnabled(GLES20.GL_SCISSOR_TEST);
+        int[] oldBox = null;
+        if (wasEnabled) {
+            oldBox = new int[4];
+            GLES20.glGetIntegerv(GLES20.GL_SCISSOR_BOX, oldBox, 0);
+        }
+
+        GLES20.glEnable(GLES20.GL_SCISSOR_TEST);
+        GLES20.glScissor(sx, sy, sw, sh);
+        drawAction.run();
+
+        if (wasEnabled && oldBox != null) {
+            GLES20.glScissor(oldBox[0], oldBox[1], oldBox[2], oldBox[3]);
+        } else {
+            GLES20.glDisable(GLES20.GL_SCISSOR_TEST);
+        }
+    }
+
     private void drawButton(Texture tex, RectF r) {
         if (tex == null) return;
         drawTextureTopLeft(tex, r.left, r.top, r.width(), r.height(), 0f,
                 1f, 1f, 1f, 1f,
                 0f, 0f, 1f, 1f);
-    }
-
-    private void drawFullscreenTexture(Texture tex, float r, float g, float b, float a) {
-        drawTextureTopLeft(tex, 0f, 0f, viewW, viewH, 0f, r, g, b, a, 0f, 0f, 1f, 1f);
     }
 
     /**
@@ -7108,7 +7250,7 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
         Matrix.rotateM(tmpModel, 0, rotationDeg, 0f, 0f, 1f);
         Matrix.scaleM(tmpModel, 0, w, h, 1f);
 
-        if (inStageSpace && mirrorX) {
+        if (inStageSpace && stagePreTransformActive) {
             Matrix.multiplyMM(tmpWorld, 0, stagePreTransform, 0, tmpModel, 0);
             Matrix.multiplyMM(tmpMvp, 0, proj, 0, tmpWorld, 0);
         } else {
@@ -7202,8 +7344,35 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
         float headHpx;
     }
 
+    private void rebuildTextureMetrics() {
+        holdUvCache[0] = buildHoldUv(0);
+        holdUvCache[1] = buildHoldUv(1);
+
+        for (int type = 0; type < noteWidthScale.length; type++) {
+            noteWidthScale[type][0] = 1f;
+            noteWidthScale[type][1] = 1f;
+            Texture normal = getNoteHeadTextureSameType(type, 0);
+            Texture highlighted = getNoteHeadTextureSameType(type, 1);
+            if (normal != null && highlighted != null && normal.width > 0) {
+                noteWidthScale[type][1] = (float) highlighted.width / (float) normal.width;
+            }
+        }
+    }
+
+    private float getNoteWidthScale(int type, int morebets) {
+        if (!multiPressHighlight || morebets != 1) return 1f;
+        if (type < 0 || type >= noteWidthScale.length) return 1f;
+        return noteWidthScale[type][1];
+    }
+
     private HoldUv getHoldUv(int morebets) {
         if (!multiPressHighlight) morebets = 0;
+        if (morebets != 1) morebets = 0;
+        HoldUv cached = holdUvCache[morebets];
+        return cached != null ? cached : buildHoldUv(morebets);
+    }
+
+    private HoldUv buildHoldUv(int morebets) {
         Texture t = (morebets == 1) ? texHoldMh : texHold;
         if (t == null || t.height <= 0) {
             HoldUv uv = new HoldUv();
@@ -7410,6 +7579,7 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
     }
 
     private void releaseFbos() {
+        if (aaFbo != null) deleteFbo(aaFbo);
         if (sceneFbo != null) deleteFbo(sceneFbo);
         if (blurFbo1 != null) deleteFbo(blurFbo1);
         if (blurFbo2 != null) deleteFbo(blurFbo2);
@@ -7419,6 +7589,7 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
         if (prprFullB != null) deleteFbo(prprFullB);
         if (prprStageA != null) deleteFbo(prprStageA);
         if (prprStageB != null) deleteFbo(prprStageB);
+        aaFbo = null;
         sceneFbo = null;
         blurFbo1 = null;
         blurFbo2 = null;
@@ -8306,6 +8477,49 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
             "  gl_FragColor = sum;\n" +
             "}\n";
 
+    private static final String FS_FXAA =
+            "precision mediump float;\n" +
+            "uniform sampler2D uTexture;\n" +
+            "uniform vec2 uInvResolution;\n" +
+            "varying vec2 vTex;\n" +
+            "float luma(vec3 c){ return dot(c, vec3(0.299, 0.587, 0.114)); }\n" +
+            "void main(){\n" +
+            "  vec3 rgbNW = texture2D(uTexture, vTex + vec2(-1.0, -1.0) * uInvResolution).rgb;\n" +
+            "  vec3 rgbNE = texture2D(uTexture, vTex + vec2( 1.0, -1.0) * uInvResolution).rgb;\n" +
+            "  vec3 rgbSW = texture2D(uTexture, vTex + vec2(-1.0,  1.0) * uInvResolution).rgb;\n" +
+            "  vec3 rgbSE = texture2D(uTexture, vTex + vec2( 1.0,  1.0) * uInvResolution).rgb;\n" +
+            "  vec4 texM = texture2D(uTexture, vTex);\n" +
+            "  vec3 rgbM = texM.rgb;\n" +
+            "  float lumaNW = luma(rgbNW);\n" +
+            "  float lumaNE = luma(rgbNE);\n" +
+            "  float lumaSW = luma(rgbSW);\n" +
+            "  float lumaSE = luma(rgbSE);\n" +
+            "  float lumaM = luma(rgbM);\n" +
+            "  float rangeMin = min(lumaM, min(min(lumaNW, lumaNE), min(lumaSW, lumaSE)));\n" +
+            "  float rangeMax = max(lumaM, max(max(lumaNW, lumaNE), max(lumaSW, lumaSE)));\n" +
+            "  float range = rangeMax - rangeMin;\n" +
+            "  if (range < max(0.0312, rangeMax * 0.125)) {\n" +
+            "    gl_FragColor = texM;\n" +
+            "    return;\n" +
+            "  }\n" +
+            "  vec2 dir;\n" +
+            "  dir.x = -((lumaNW + lumaNE) - (lumaSW + lumaSE));\n" +
+            "  dir.y =  ((lumaNW + lumaSW) - (lumaNE + lumaSE));\n" +
+            "  float dirReduce = max((lumaNW + lumaNE + lumaSW + lumaSE) * 0.03125, 0.0078125);\n" +
+            "  float rcpDirMin = 1.0 / (min(abs(dir.x), abs(dir.y)) + dirReduce);\n" +
+            "  dir = min(vec2(8.0), max(vec2(-8.0), dir * rcpDirMin)) * uInvResolution;\n" +
+            "  vec4 rgbA = 0.5 * (texture2D(uTexture, vTex + dir * (1.0 / 3.0 - 0.5)) +\n" +
+            "                    texture2D(uTexture, vTex + dir * (2.0 / 3.0 - 0.5)));\n" +
+            "  vec4 rgbB = rgbA * 0.5 + 0.25 * (texture2D(uTexture, vTex + dir * -0.5) +\n" +
+            "                                  texture2D(uTexture, vTex + dir *  0.5));\n" +
+            "  float lumaB = luma(rgbB.rgb);\n" +
+            "  if (lumaB < rangeMin || lumaB > rangeMax) {\n" +
+            "    gl_FragColor = rgbA;\n" +
+            "  } else {\n" +
+            "    gl_FragColor = rgbB;\n" +
+            "  }\n" +
+            "}\n";
+
     private static final String VS_BATCH =
             "uniform mat4 uProjection;\n" +
             "attribute vec2 aPosition;\n" +
@@ -8338,7 +8552,10 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
             "varying vec2 vTex;\n" +
             "varying vec4 vColor;\n" +
             "void main(){\n" +
-            "  float maskAlpha = texture2D(uTexture, vTex).a;\n" +
-            "  gl_FragColor = vec4(vColor.rgb, maskAlpha * vColor.a);\n" +
+            "  vec4 tex = texture2D(uTexture, vTex);\n" +
+            "  vec4 outC;\n" +
+            "  outC.a = tex.a * vColor.a;\n" +
+            "  outC.rgb = tex.rgb * vColor.rgb * vColor.a;\n" +
+            "  gl_FragColor = outC;\n" +
             "}\n";
 }

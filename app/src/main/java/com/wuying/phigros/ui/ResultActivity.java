@@ -102,11 +102,13 @@ public class ResultActivity extends AppCompatActivity {
         String songName = "";
         String difficulty = "";
         String bgPath = null;
+        float backgroundDim = 0.6f;
 
         if (playBundle != null) {
             songName = playBundle.getString(PlayActivity.EXTRA_SONG_NAME, "");
             difficulty = playBundle.getString(PlayActivity.EXTRA_DIFFICULTY, "");
             bgPath = playBundle.getString(PlayActivity.EXTRA_BG_PATH, null);
+            backgroundDim = clampFloat(playBundle.getFloat(PlayActivity.EXTRA_BG_DIM, 0.6f), 0.3f, 0.8f, 0.6f);
         }
 
         if (tvSong != null) tvSong.setText(songName);
@@ -241,7 +243,7 @@ public class ResultActivity extends AppCompatActivity {
         if (tvSong != null) tvSong.setIncludeFontPadding(true);
         if (tvDiff != null) tvDiff.setIncludeFontPadding(true);
 
-        startEnterAnimation();
+        startEnterAnimation(backgroundDim);
     }
 
     private void saveReplay(Bundle playBundle) {
@@ -269,7 +271,7 @@ public class ResultActivity extends AppCompatActivity {
                 settings.keyScale = playBundle.getFloat(PlayActivity.EXTRA_KEY_SCALE, 1.0f);
                 settings.scrollSpeed = playBundle.getFloat(PlayActivity.EXTRA_SCROLL_SPEED, 1.0f);
                 settings.mirrorX = playBundle.getBoolean(PlayActivity.EXTRA_MIRROR_X, false);
-                settings.bgDim = playBundle.getFloat(PlayActivity.EXTRA_BG_DIM, 0.6f);
+                settings.bgDim = clampFloat(playBundle.getFloat(PlayActivity.EXTRA_BG_DIM, 0.6f), 0.3f, 0.8f, 0.6f);
                 settings.lowRes = playBundle.getBoolean(PlayActivity.EXTRA_LOW_RES, false);
                 settings.antialias = playBundle.getBoolean(PlayActivity.EXTRA_ANTIALIAS, false);
                 settings.showFps = playBundle.getBoolean(PlayActivity.EXTRA_SHOW_FPS, false);
@@ -426,6 +428,10 @@ public class ResultActivity extends AppCompatActivity {
 
     private static int clamp(int val, int min, int max) { return val < min ? min : (val > max ? max : val); }
     private static int pack(int r, int g, int b) { return (0xff << 24) | ((r & 0xff) << 16) | ((g & 0xff) << 8) | (b & 0xff); }
+    private static float clampFloat(float val, float min, float max, float fallback) {
+        if (!Float.isFinite(val)) return fallback;
+        return val < min ? min : (val > max ? max : val);
+    }
 
     private void applyBlurToView(View view, float radius) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -435,7 +441,7 @@ public class ResultActivity extends AppCompatActivity {
         }
     }
 
-    private void startEnterAnimation() {
+    private void startEnterAnimation(float backgroundDim) {
         View contentContainer = findViewById(R.id.content_container);
         View overlay = findViewById(R.id.view_dim_overlay);
         View ivGrade = findViewById(R.id.iv_grade);
@@ -452,18 +458,7 @@ public class ResultActivity extends AppCompatActivity {
         long duration3 = 1280;
 
         if (overlay != null) {
-            ObjectAnimator overlayToDark = ObjectAnimator.ofFloat(overlay, "alpha", 0f, 0.7f);
-            overlayToDark.setDuration(duration1_5);
-            overlayToDark.setInterpolator(new android.view.animation.DecelerateInterpolator(1.5f));
-
-            ObjectAnimator overlayToClear = ObjectAnimator.ofFloat(overlay, "alpha", 0.7f, 0.45f);
-            overlayToClear.setStartDelay(duration1_5);
-            overlayToClear.setDuration(duration1_5);
-            overlayToClear.setInterpolator(new android.view.animation.AccelerateInterpolator(1.5f));
-
-            AnimatorSet overlayAnim = new AnimatorSet();
-            overlayAnim.playSequentially(overlayToDark, overlayToClear);
-            overlayAnim.start();
+            overlay.setAlpha(backgroundDim);
         }
 
         float startY = 1000f;

@@ -74,6 +74,7 @@ public class JudgeLine {
     /** Cached last frame state, avoids re-computing for multiple render passes. */
     public transient StateHolder lastState = null;
     public transient double lastStateTimeSec = Double.NaN;
+    private transient final float[] tmpColor = new float[3];
 
     // Event cursors for O(1) amortized per-frame lookup
     public transient EventCursor curRotate = new EventCursor();
@@ -423,7 +424,7 @@ public class JudgeLine {
         }
 
         if (judgeLineColorEvents != null && !judgeLineColorEvents.isEmpty()) {
-            float[] c = EventUtils.getColorVal(beat, judgeLineColorEvents, curColor);
+            float[] c = EventUtils.getColorValInto(beat, judgeLineColorEvents, curColor, tmpColor);
             if (c != null && c.length >= 3) {
                 r = c[0];
                 g = c[1];
@@ -502,7 +503,10 @@ public class JudgeLine {
 
     /** Compute and return a fresh state holder. */
     public StateHolder fillState(double sec, float stageAspectRatio) {
-        return getStateInto(new StateHolder(), sec, stageAspectRatio);
+        if (lastState != null && lastStateTimeSec == sec) {
+            return lastState;
+        }
+        return getStateInto(lastState != null ? lastState : new StateHolder(), sec, stageAspectRatio);
     }
 
     public State getState(double sec, float stageAspectRatio) {

@@ -368,14 +368,6 @@ public class Chart {
                 if (note.isFake) continue;
 
                 eff.add(new ClickEffectItem(note, note.sect, rnd));
-                if (note.isHold) {
-                    double dt = 30.0 / line.bpm;
-                    double st = note.sect + dt;
-                    while (st < note.holdEndTime) {
-                        eff.add(new ClickEffectItem(note, st, rnd));
-                        st += dt;
-                    }
-                }
             }
         }
         eff.sort(Comparator.comparingDouble(a -> a.timeSec));
