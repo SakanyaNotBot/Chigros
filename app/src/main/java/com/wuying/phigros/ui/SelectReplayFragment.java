@@ -377,8 +377,10 @@ public class SelectReplayFragment extends Fragment {
             return;
         }
 
-        // Read stored settings
+        // Only chart offset is pinned by the replay file. Everything else uses
+        // the user's current audio/video settings.
         ReplayManager.InfoJson info = ReplayManager.getReplayInfo(requireContext(), uuid);
+        ChartSelectActivity h = host();
 
         Intent it = new Intent(requireContext(), PlayActivity.class);
         it.putExtra(PlayActivity.EXTRA_MUSIC_PATH, musicFile.getAbsolutePath());
@@ -390,40 +392,23 @@ public class SelectReplayFragment extends Fragment {
         it.putExtra(PlayActivity.EXTRA_REPLAY_MODE, true);
         it.putExtra(PlayActivity.EXTRA_REPLAY_PATH, replayJson.getAbsolutePath());
 
-        // Apply stored settings (or defaults)
-        if (info != null) {
-            it.putExtra(PlayActivity.EXTRA_ASPECT_RATIO, info.aspectRatio);
-            it.putExtra(PlayActivity.EXTRA_KEY_SCALE, info.keyScale > 0 ? info.keyScale : 1.0f);
-            it.putExtra(PlayActivity.EXTRA_SCROLL_SPEED, info.scrollSpeed > 0 ? info.scrollSpeed : 1.0f);
-            it.putExtra(PlayActivity.EXTRA_MIRROR_X, info.mirrorX);
-            it.putExtra(PlayActivity.EXTRA_BG_DIM, info.bgDim > 0 ? info.bgDim : 0.6f);
-            it.putExtra(PlayActivity.EXTRA_LOW_RES, info.lowRes);
-            it.putExtra(PlayActivity.EXTRA_ANTIALIAS, info.antialias);
-            it.putExtra(PlayActivity.EXTRA_SHOW_FPS, info.showFps);
-            it.putExtra(PlayActivity.EXTRA_SHOW_DEBUG, info.showDebug);
-            it.putExtra(PlayActivity.EXTRA_MULTI_HIGHLIGHT, info.multiHighlight);
-            it.putExtra(PlayActivity.EXTRA_APFC, info.apfc);
-            it.putExtra(PlayActivity.EXTRA_CHALLENGE, info.challenge);
-            it.putExtra(PlayActivity.EXTRA_MUSIC_SPEED, info.musicSpeed > 0 ? info.musicSpeed : 1.0f);
-            it.putExtra(PlayActivity.EXTRA_MUSIC_VOLUME, info.musicVolPct / 100f);
-            it.putExtra(PlayActivity.EXTRA_SFX_VOLUME, info.sfxVolPct / 100f);
-            it.putExtra(PlayActivity.EXTRA_CHART_OFFSET_MS, info.chartOffsetMs);
-            it.putExtra(PlayActivity.EXTRA_AUDIO_OFFSET_MS, info.audioOffsetMs);
-        } else {
-            it.putExtra(PlayActivity.EXTRA_ASPECT_RATIO, 0f);
-            it.putExtra(PlayActivity.EXTRA_MUSIC_SPEED, 1.0f);
-            it.putExtra(PlayActivity.EXTRA_KEY_SCALE, 1.0f);
-            it.putExtra(PlayActivity.EXTRA_SCROLL_SPEED, 1.0f);
-            it.putExtra(PlayActivity.EXTRA_MUSIC_VOLUME, 1.0f);
-            it.putExtra(PlayActivity.EXTRA_SFX_VOLUME, 1.0f);
-            it.putExtra(PlayActivity.EXTRA_MIRROR_X, false);
-            it.putExtra(PlayActivity.EXTRA_BG_DIM, 0.6f);
-            it.putExtra(PlayActivity.EXTRA_LOW_RES, false);
-            it.putExtra(PlayActivity.EXTRA_CHALLENGE, false);
-            it.putExtra(PlayActivity.EXTRA_SHOW_FPS, false);
-            it.putExtra(PlayActivity.EXTRA_SHOW_DEBUG, false);
-            it.putExtra(PlayActivity.EXTRA_AUDIO_OFFSET_MS, 0);
-        }
+        it.putExtra(PlayActivity.EXTRA_ASPECT_RATIO, h.getAspectRatio() <= 0f ? 0f : h.getAspectRatio());
+        it.putExtra(PlayActivity.EXTRA_CHART_OFFSET_MS, info != null ? info.chartOffsetMs : 0);
+        it.putExtra(PlayActivity.EXTRA_AUDIO_OFFSET_MS, h.getAudioOffsetMs());
+        it.putExtra(PlayActivity.EXTRA_MUSIC_SPEED, h.getMusicSpeed());
+        it.putExtra(PlayActivity.EXTRA_KEY_SCALE, h.getKeyScale());
+        it.putExtra(PlayActivity.EXTRA_SCROLL_SPEED, h.getScrollSpeed());
+        it.putExtra(PlayActivity.EXTRA_SFX_VOLUME, h.getSfxVolumePct() / 100f);
+        it.putExtra(PlayActivity.EXTRA_MUSIC_VOLUME, h.getMusicVolumePct() / 100f);
+        it.putExtra(PlayActivity.EXTRA_MIRROR_X, h.isMirrorX());
+        it.putExtra(PlayActivity.EXTRA_BG_DIM, h.getBackgroundDim());
+        it.putExtra(PlayActivity.EXTRA_LOW_RES, h.isLowResMode());
+        it.putExtra(PlayActivity.EXTRA_ANTIALIAS, h.isAntialias());
+        it.putExtra(PlayActivity.EXTRA_SHOW_FPS, h.isShowFps());
+        it.putExtra(PlayActivity.EXTRA_SHOW_DEBUG, h.isShowDebugInfo());
+        it.putExtra(PlayActivity.EXTRA_MULTI_HIGHLIGHT, h.isMultiPressHighlight());
+        it.putExtra(PlayActivity.EXTRA_APFC, h.isApfcIndicator());
+        it.putExtra(PlayActivity.EXTRA_CHALLENGE, h.isChallengeMode());
 
         // Apply current skin
         int skinIdx = SkinManager.getSelectedSkinIndex(requireContext());

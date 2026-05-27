@@ -267,23 +267,7 @@ public class ResultActivity extends AppCompatActivity {
                 if (cp != null) chartFile = new File(cp);
                 if (mp != null) musicFile = new File(mp);
                 if (bp != null) bgFile = new File(bp);
-                settings.aspectRatio = playBundle.getFloat(PlayActivity.EXTRA_ASPECT_RATIO, 0f);
-                settings.keyScale = playBundle.getFloat(PlayActivity.EXTRA_KEY_SCALE, 1.0f);
-                settings.scrollSpeed = playBundle.getFloat(PlayActivity.EXTRA_SCROLL_SPEED, 1.0f);
-                settings.mirrorX = playBundle.getBoolean(PlayActivity.EXTRA_MIRROR_X, false);
-                settings.bgDim = clampFloat(playBundle.getFloat(PlayActivity.EXTRA_BG_DIM, 0.6f), 0.3f, 0.8f, 0.6f);
-                settings.lowRes = playBundle.getBoolean(PlayActivity.EXTRA_LOW_RES, false);
-                settings.antialias = playBundle.getBoolean(PlayActivity.EXTRA_ANTIALIAS, false);
-                settings.showFps = playBundle.getBoolean(PlayActivity.EXTRA_SHOW_FPS, false);
-                settings.showDebug = playBundle.getBoolean(PlayActivity.EXTRA_SHOW_DEBUG, false);
-                settings.multiHighlight = playBundle.getBoolean(PlayActivity.EXTRA_MULTI_HIGHLIGHT, true);
-                settings.apfc = playBundle.getBoolean(PlayActivity.EXTRA_APFC, false);
-                settings.challenge = playBundle.getBoolean(PlayActivity.EXTRA_CHALLENGE, false);
-                settings.musicSpeed = playBundle.getFloat(PlayActivity.EXTRA_MUSIC_SPEED, 1.0f);
-                settings.musicVolPct = (int)(playBundle.getFloat(PlayActivity.EXTRA_MUSIC_VOLUME, 1.0f) * 100);
-                settings.sfxVolPct = (int)(playBundle.getFloat(PlayActivity.EXTRA_SFX_VOLUME, 1.0f) * 100);
                 settings.chartOffsetMs = playBundle.getInt(PlayActivity.EXTRA_CHART_OFFSET_MS, 0);
-                settings.audioOffsetMs = playBundle.getInt(PlayActivity.EXTRA_AUDIO_OFFSET_MS, 0);
             }
             String uuid = ReplayManager.savePersistedReplay(this, replayData, chartFile, musicFile, bgFile, settings);
             if (uuid == null) {

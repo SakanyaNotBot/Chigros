@@ -267,25 +267,10 @@ public final class ReplayManager {
         info.chartRelPath = chartRelPath;
         info.musicRelPath = musicRelPath;
         info.bgRelPath = bgRelPath;
-        // Copy settings
+        // Replay files should only pin the chart offset. Other playback settings
+        // intentionally come from the user's current preferences when replaying.
         if (settings != null) {
-            info.aspectRatio = settings.aspectRatio;
-            info.keyScale = settings.keyScale;
-            info.scrollSpeed = settings.scrollSpeed;
-            info.mirrorX = settings.mirrorX;
-            info.bgDim = settings.bgDim;
-            info.lowRes = settings.lowRes;
-            info.antialias = settings.antialias;
-            info.showFps = settings.showFps;
-            info.showDebug = settings.showDebug;
-            info.multiHighlight = settings.multiHighlight;
-            info.apfc = settings.apfc;
-            info.challenge = settings.challenge;
-            info.musicSpeed = settings.musicSpeed;
-            info.musicVolPct = settings.musicVolPct;
-            info.sfxVolPct = settings.sfxVolPct;
             info.chartOffsetMs = settings.chartOffsetMs;
-            info.audioOffsetMs = settings.audioOffsetMs;
         }
         JSON_MAPPER.writeValue(new File(replayDir, "info.json"), info);
 
@@ -714,24 +699,6 @@ public final class ReplayManager {
         public String chartRelPath;
         public String musicRelPath;
         public String bgRelPath;
-        // Video settings
-        public float aspectRatio;
-        public float keyScale = 1.0f;
-        public float scrollSpeed = 1.0f;
-        public boolean mirrorX;
-        public float bgDim = 0.6f;
-        public boolean lowRes;
-        public boolean antialias;
-        public boolean showFps;
-        public boolean showDebug;
-        public boolean multiHighlight = true;
-        public boolean apfc;
-        public boolean challenge;
-        // Audio settings
-        public float musicSpeed = 1.0f;
-        public int musicVolPct = 100;
-        public int sfxVolPct = 100;
         public int chartOffsetMs;
-        public int audioOffsetMs;
     }
 }
