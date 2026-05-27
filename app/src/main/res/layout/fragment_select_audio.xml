@@ -156,6 +156,63 @@
                     app:trackColorInactive="@color/select_slider_inactive" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
+
+        <com.google.android.material.card.MaterialCardView
+            style="@style/SelectCard"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="18dp">
+
+                <TextView
+                    style="@style/SelectSectionTitle"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/section_audio_offset" />
+
+                <com.google.android.material.textfield.TextInputLayout
+                    style="@style/SelectInput"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp">
+
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/et_audio_offset"
+                        style="@style/SelectEditText"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:hint="-500 ~ 500 ms"
+                        android:inputType="numberSigned" />
+                </com.google.android.material.textfield.TextInputLayout>
+
+                <com.google.android.material.slider.Slider
+                    android:id="@+id/slider_audio_offset"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:stepSize="1"
+                    android:valueFrom="-500"
+                    android:valueTo="500"
+                    app:haloColor="@color/select_slider_halo"
+                    app:thumbColor="@color/select_slider_active_alt"
+                    app:tickColorActive="@color/select_slider_active_alt"
+                    app:tickColorInactive="@color/select_slider_inactive"
+                    app:trackColorActive="@color/select_slider_active_alt"
+                    app:trackColorInactive="@color/select_slider_inactive" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btn_open_calibration"
+                    style="@style/SelectButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:text="@string/action_open_calibration" />
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
     </LinearLayout>
 
 </androidx.core.widget.NestedScrollView>

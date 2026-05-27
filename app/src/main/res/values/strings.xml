@@ -65,6 +65,14 @@
     <string name="section_music_volume">音乐音量</string>
     <string name="section_sfx_volume">打击音效音量</string>
     <string name="section_music_speed">音乐倍速</string>
+    <string name="section_audio_offset">延迟校准</string>
+    <string name="action_open_calibration">开始校准</string>
+    <string name="calibration_title">延迟校准</string>
+    <string name="calibration_offset_format">%1$d ms</string>
+    <string name="calibration_hint">听到节拍时点击左侧区域，调整到音符与判定线同时到达</string>
+    <string name="calibration_reset">重置</string>
+    <string name="calibration_done">完成</string>
+    <string name="calibration_load_failed">加载校准音频失败：%1$s</string>
 
     <string name="setting_replay_recording">启用回放记录</string>
     <string name="section_replay_manage">回放管理</string>

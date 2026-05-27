@@ -66,6 +66,14 @@
     <string name="section_music_volume">Music Volume</string>
     <string name="section_sfx_volume">Hitsound Volume</string>
     <string name="section_music_speed">Music Speed</string>
+    <string name="section_audio_offset">Latency Calibration</string>
+    <string name="action_open_calibration">Start Calibration</string>
+    <string name="calibration_title">Latency Calibration</string>
+    <string name="calibration_offset_format">%1$d ms</string>
+    <string name="calibration_hint">Tap the left area on the beat. Adjust until the note reaches the judge line with the sound.</string>
+    <string name="calibration_reset">Reset</string>
+    <string name="calibration_done">Done</string>
+    <string name="calibration_load_failed">Failed to load calibration audio: %1$s</string>
 
     <string name="setting_replay_recording">Enable Replay Recording</string>
     <string name="section_replay_manage">Replay Management</string>

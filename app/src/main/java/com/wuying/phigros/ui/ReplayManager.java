@@ -285,6 +285,7 @@ public final class ReplayManager {
             info.musicVolPct = settings.musicVolPct;
             info.sfxVolPct = settings.sfxVolPct;
             info.chartOffsetMs = settings.chartOffsetMs;
+            info.audioOffsetMs = settings.audioOffsetMs;
         }
         JSON_MAPPER.writeValue(new File(replayDir, "info.json"), info);
 
@@ -731,5 +732,6 @@ public final class ReplayManager {
         public int musicVolPct = 100;
         public int sfxVolPct = 100;
         public int chartOffsetMs;
+        public int audioOffsetMs;
     }
 }

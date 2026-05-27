@@ -697,9 +697,11 @@ public class GameRenderer implements GLSurfaceView.Renderer {
     private double smoothLastRawPlayheadSec = 0.0;
     private double smoothReferencePlayheadSec = 0.0;
     private long smoothReferenceTimeNs = 0L;
-    private final java.util.LinkedList<Double> smoothBiases = new java.util.LinkedList<>();
-    private double smoothBiasSum = 0.0;
     private static final int SMOOTH_BIAS_HISTORY_SIZE = 60;
+    private final double[] smoothBiasHistory = new double[SMOOTH_BIAS_HISTORY_SIZE];
+    private int smoothBiasIndex = 0;
+    private int smoothBiasCount = 0;
+    private double smoothBiasSum = 0.0;
     private boolean visualClockInit = false;
     private long visualLastFrameNs = 0L;
     private double visualTimeSec = 0.0;
@@ -754,8 +756,12 @@ public class GameRenderer implements GLSurfaceView.Renderer {
     private final ArrayList<HitEffect> hitEffects = new ArrayList<>();
     private final ArrayList<BadEffect> badEffects = new ArrayList<>();
     private final float[] tmpNotePos = new float[2];
+    private final float[] tmpJudgePos = new float[2];
     private final float[] lineRotOut = new float[1];
     private final JudgeLine.StateHolder tmpHistoricalLineState = new JudgeLine.StateHolder();
+    private final ArrayList<JudgeEvent> frameJudgeEvents = new ArrayList<>(16);
+    private final ArrayList<JudgeEvent> judgeEventPool = new ArrayList<>(16);
+    private final HashSet<Note> frameHoldHeadSpawned = new HashSet<>();
 
     // Menu blur FBO
     private FboTex aaFbo;
@@ -1229,6 +1235,7 @@ public class GameRenderer implements GLSurfaceView.Renderer {
             n.holdActive = false;
             n.holdPerfect = false;
             n.holdPreJudge = false;
+            n.holdFxActive = false;
             n.holdUpTimeSec = Double.POSITIVE_INFINITY;
             n.holdDiffSec = 0.0;
             n.safeFrame = 0;
@@ -1298,8 +1305,7 @@ public class GameRenderer implements GLSurfaceView.Renderer {
         smoothLastRawPlayheadSec = 0.0;
         smoothReferencePlayheadSec = 0.0;
         smoothReferenceTimeNs = 0L;
-        smoothBiases.clear();
-        smoothBiasSum = 0.0;
+        resetSmoothBiasHistory();
 
         // Reset replay state
         replayEntryIndex = 0;
@@ -1374,7 +1380,6 @@ public class GameRenderer implements GLSurfaceView.Renderer {
         double maxEarlyWindow = getBadWindowSec();
         int scanEnd = Math.min(nSize, judgeCursor + 96);
 
-        float[] pos = new float[2];
         float noteWidthBase0 = stageW * 0.1234375f * keyScale;
         float radius = Math.max(8f, noteWidthBase0 * 0.55f);
         float r2 = radius * radius;
@@ -1401,9 +1406,9 @@ public class GameRenderer implements GLSurfaceView.Renderer {
             double judgeWin = getJudgeWindowSec(n);
             if (abs > judgeWin) continue;
 
-            if (!computeNoteHeadPosition(n, tChart, pos)) continue;
-            float dx = pos[0] - x;
-            float dy = pos[1] - y;
+            if (!computeNoteHeadPosition(n, tChart, tmpJudgePos)) continue;
+            float dx = tmpJudgePos[0] - x;
+            float dy = tmpJudgePos[1] - y;
             if (dx * dx + dy * dy > r2) continue;
 
             int jr = calcJudgement(n, abs);
@@ -1602,6 +1607,10 @@ public class GameRenderer implements GLSurfaceView.Renderer {
         n.holdPreJudge = false;
         n.holdUpTimeSec = Double.POSITIVE_INFINITY;
         n.clicked = (jr == JR_PERFECT || jr == JR_GOOD);
+        n.holdFxActive = n.type == GameConstants.NOTE_HOLD
+                && (jr == JR_PERFECT || jr == JR_GOOD)
+                && n.holdFxActive
+                && effectTimeSec < n.holdEndTime;
 
         if (jr == JR_PERFECT) {
             judgeCounts[0]++;
@@ -1675,7 +1684,7 @@ public class GameRenderer implements GLSurfaceView.Renderer {
                 case GameConstants.NOTE_FLICK: entryType = ReplayData.TYPE_FLICK; break;
                 default: entryType = ReplayData.TYPE_TAP;
             }
-            int noteIdx = chart.allNotesSorted.indexOf(n);
+            int noteIdx = n.sortedIndex;
             if (noteIdx >= 0) {
                 ReplayData.ReplayEntry re = new ReplayData.ReplayEntry();
                 re.t = entryType;
@@ -2767,6 +2776,28 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
      * Smoothed audio playhead: advances a local clock each frame via nanoTime and gently
      * corrects towards the native audio playhead for buttery motion at high refresh rates.
      */
+    private void resetSmoothBiasHistory() {
+        smoothBiasIndex = 0;
+        smoothBiasCount = 0;
+        smoothBiasSum = 0.0;
+    }
+
+    private void addSmoothBias(double bias) {
+        if (smoothBiasCount < SMOOTH_BIAS_HISTORY_SIZE) {
+            smoothBiasHistory[smoothBiasIndex] = bias;
+            smoothBiasSum += bias;
+            smoothBiasCount++;
+        } else {
+            smoothBiasSum -= smoothBiasHistory[smoothBiasIndex];
+            smoothBiasHistory[smoothBiasIndex] = bias;
+            smoothBiasSum += bias;
+        }
+        smoothBiasIndex++;
+        if (smoothBiasIndex >= SMOOTH_BIAS_HISTORY_SIZE) {
+            smoothBiasIndex = 0;
+        }
+    }
+
     private double getSmoothedPlayheadSeconds() {
         final double raw = NativeAudioEngine.getPlayheadSeconds();
         final long nowNs = System.nanoTime();
@@ -2778,8 +2809,7 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
             smoothLastRawPlayheadSec = raw;
             smoothReferencePlayheadSec = raw;
             smoothReferenceTimeNs = nowNs;
-            smoothBiases.clear();
-            smoothBiasSum = 0.0;
+            resetSmoothBiasHistory();
             return raw;
         }
 
@@ -2789,8 +2819,7 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
             smoothLastRawPlayheadSec = raw;
             smoothReferencePlayheadSec = raw;
             smoothReferenceTimeNs = nowNs;
-            smoothBiases.clear();
-            smoothBiasSum = 0.0;
+            resetSmoothBiasHistory();
             return raw;
         }
 
@@ -2807,16 +2836,11 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
         double predicted = smoothReferencePlayheadSec + elapsedSinceRef * (double) musicSpeed;
         double bias = predicted - raw;
         
-        // Add bias to history and maintain rolling average
-        smoothBiases.add(bias);
-        smoothBiasSum += bias;
-        while (smoothBiases.size() > SMOOTH_BIAS_HISTORY_SIZE) {
-            Double removed = smoothBiases.removeFirst();
-            if (removed != null) smoothBiasSum -= removed;
-        }
+        // Add bias to history and maintain rolling average.
+        addSmoothBias(bias);
         
         // Calculate average bias over the history window
-        double avgBias = smoothBiases.isEmpty() ? 0.0 : (smoothBiasSum / smoothBiases.size());
+        double avgBias = smoothBiasCount == 0 ? 0.0 : (smoothBiasSum / smoothBiasCount);
         
         // Detect discontinuities (restart/seek/pause-resume edge)
         double diff = raw - smoothLastRawPlayheadSec;
@@ -2829,8 +2853,7 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
             out = raw;
             smoothReferencePlayheadSec = raw;
             smoothReferenceTimeNs = nowNs;
-            smoothBiases.clear();
-            smoothBiasSum = 0.0;
+            resetSmoothBiasHistory();
         } else {
             // Apply bias-corrected smoothing
             // Subtract average bias to get smooth, jitter-free time
@@ -3201,6 +3224,7 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
                         if (holdHeadPassedLine && drawTailFp < drawHeadFp) {
                             drawTailFp = Math.max(drawTailFp, 0f);
                         }
+                        boolean hideKeptHeadDuringTailClamp = note.clicked && holdHeadPassedLine && drawTailFpUnclamped < drawHeadFp;
                         boolean tailClampedToJudgmentLine = holdHeadPassedLine && drawTailFpUnclamped < 0f && drawTailFp == 0f;
                         // Reverse hold: when tail crosses past the head (length ≤ 0),
                         // lock the length to 0 — skip body and tail rendering entirely.
@@ -3214,7 +3238,7 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
                         // body behind end). Match this order: head → body → tail.
                         if (!reverseHoldLocked) {
                         // --- Head ---
-                        boolean keepHead = skinHoldKeepHead;
+                        boolean keepHead = skinHoldKeepHead && !hideKeptHeadDuringTailClamp;
                         boolean holdCompact = skinHoldCompact;
                         float headOffset = 0.4f;
                         if (!holdHeadPassedLine || keepHead) {
@@ -5334,6 +5358,7 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
         n.holdActive = true;
         n.holdPerfect = perfect;
         n.holdPreJudge = false;
+        n.holdFxActive = true;
         n.holdUpTimeSec = Double.POSITIVE_INFINITY;
         n.holdDiffSec = diffSec;
         n.safeFrame = HOLD_SAFE_FRAME_INIT;
@@ -5352,6 +5377,10 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
         return HOLD_PARTICLE_INTERVAL_BEATS * 60.0 / bpm;
     }
 
+    private double getHoldBodyEffectEndSec(@NonNull Note n, double interval) {
+        return n.holdEndTime - 0.25 * interval;
+    }
+
     private double firstHoldBodyEffectTimeSec(@NonNull Note n, double triggerTimeSec) {
         double interval = getHoldBodyEffectIntervalSec(n);
         if (!Double.isFinite(interval) || interval <= 0.0) return Double.POSITIVE_INFINITY;
@@ -5360,19 +5389,21 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
     }
 
     private void spawnDueHoldBodyHitEffects(@NonNull Note n, double tChart) {
-        if (!n.holdActive || n.judgeResult >= 0) return;
+        if (!n.holdFxActive) return;
         double interval = getHoldBodyEffectIntervalSec(n);
         if (!Double.isFinite(interval) || interval <= 0.0) {
             n.holdFxAtSec = Double.POSITIVE_INFINITY;
+            n.holdFxActive = false;
             return;
         }
         if (!Double.isFinite(n.holdFxAtSec)) {
             n.holdFxAtSec = tChart + interval;
         }
 
-        while (tChart >= n.holdFxAtSec) {
+        double effectEndSec = getHoldBodyEffectEndSec(n, interval);
+        while (tChart >= n.holdFxAtSec && n.holdFxAtSec < effectEndSec) {
             double effectTimeSec = n.holdFxAtSec;
-            if (effectTimeSec >= n.sect && effectTimeSec < n.holdEndTime) {
+            if (effectTimeSec >= n.sect && effectTimeSec < effectEndSec) {
                 if (n.holdPerfect) {
                     spawnHoldBodyHitEffect(n, effectTimeSec, skinPColor[0], skinPColor[1], skinPColor[2], skinPAlpha, 4);
                 } else {
@@ -5380,6 +5411,9 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
                 }
             }
             n.holdFxAtSec += interval;
+        }
+        if (tChart >= effectEndSec && n.holdFxAtSec >= effectEndSec) {
+            n.holdFxActive = false;
         }
     }
 
@@ -5406,12 +5440,11 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
         for (Note n : notes) {
             if (n == null) continue;
             if (n.type != GameConstants.NOTE_HOLD) continue;
-            if (!n.holdActive) continue;
-            if (n.judgeResult >= 0) continue;
+            if (!n.holdActive && !n.holdFxActive) continue;
 
             spawnDueHoldBodyHitEffects(n, tChart);
 
-            if (tChart >= n.holdEndTime - HOLD_TAIL_EARLY_SETTLE) {
+            if (n.holdActive && n.judgeResult < 0 && tChart >= n.holdEndTime - HOLD_TAIL_EARLY_SETTLE) {
                 n.holdActive = false;
                 n.holdPreJudge = false;
                 commitJudgement(n, JR_PERFECT, 0.0);
@@ -5485,10 +5518,10 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
 
         for (Note n : notes) {
             if (n == null || n.type != GameConstants.NOTE_HOLD) continue;
-            if (!n.holdActive || n.judgeResult >= 0) continue;
+            if (!n.holdActive && !n.holdFxActive) continue;
             spawnDueHoldBodyHitEffects(n, tChart);
             // holdPreJudge is set by PERFECT/GOOD HOLD_RELEASE.
-            if (n.holdPreJudge && tChart >= n.holdEndTime - HOLD_TAIL_EARLY_SETTLE) {
+            if (n.holdActive && n.judgeResult < 0 && n.holdPreJudge && tChart >= n.holdEndTime - HOLD_TAIL_EARLY_SETTLE) {
                 n.holdActive = false;
                 n.holdPreJudge = false;
                 commitJudgement(n, n.holdPerfect ? JR_PERFECT : JR_GOOD, n.holdDiffSec);
@@ -5546,21 +5579,8 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
         // isActive (held) → type 2 (Hold/Drag continuous)
         // flicking && !flicked → type 3 (Flick/Move)
 
-        class JudgeEvent {
-            float offsetX; float offsetY;
-            int type;          // 1=Click, 2=Hold/Drag, 3=Flick/Move
-            boolean judged;
-            FlickTracker event; // Flick tracker reference (type 3 only)
-            int touchId;
-
-            JudgeEvent(float ox, float oy, int type, FlickTracker evt, int tid) {
-                this.offsetX = ox; this.offsetY = oy; this.type = type;
-                this.judged = false;
-                this.event = evt; this.touchId = tid;
-            }
-        }
-
-        ArrayList<JudgeEvent> judgeList = new ArrayList<>();
+        recycleJudgeEvents(frameJudgeEvents);
+        ArrayList<JudgeEvent> judgeList = frameJudgeEvents;
         for (Map.Entry<Integer, TouchState> ent : activeTouches.entrySet()) {
             int id = ent.getKey();
             TouchState ts = ent.getValue();
@@ -5568,13 +5588,13 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
             FlickTracker tr = flickTrackers.get(id);
 
             if (isTapped) {
-                judgeList.add(new JudgeEvent(ts.x, ts.y, 1, null, id));
+                judgeList.add(obtainJudgeEvent(ts.x, ts.y, 1, null, id));
             }
             // type 2: continuous touch (always present if touch is active)
-            judgeList.add(new JudgeEvent(ts.x, ts.y, 2, null, id));
+            judgeList.add(obtainJudgeEvent(ts.x, ts.y, 2, null, id));
             // type 3: flick gesture (flicking && !flicked)
             if (tr != null && tr.flicking && !tr.flicked) {
-                judgeList.add(new JudgeEvent(ts.x, ts.y, 3, tr, id));
+                judgeList.add(obtainJudgeEvent(ts.x, ts.y, 3, tr, id));
             }
         }
 
@@ -5831,7 +5851,8 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
         // isJudged=false:
         //   delta >= -goodTimeRange → wait (protection mechanism)
         //   delta < -goodTimeRange → Miss
-        java.util.Set<Note> holdHeadSpawned = new java.util.HashSet<>();
+        frameHoldHeadSpawned.clear();
+        HashSet<Note> holdHeadSpawned = frameHoldHeadSpawned;
         try {
         for (int i = judgeCursor; i < nSize; i++) {
             Note note = notes.get(i);
@@ -5910,7 +5931,7 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
                         }
                         // Record HOLD_PRESS immediately so short holds aren't missed
                         if (replayRecording && replayRecorderData != null) {
-                            int idx = chart.allNotesSorted.indexOf(note);
+                            int idx = note.sortedIndex;
                             if (idx >= 0 && !recordedHoldPressNotes.contains(idx)) {
                                 recordedHoldPressNotes.add(idx);
                                 ReplayData.ReplayEntry pe = new ReplayData.ReplayEntry();
@@ -5936,7 +5957,7 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
                         }
                         // Record HOLD_PRESS immediately so short holds aren't missed
                         if (replayRecording && replayRecorderData != null) {
-                            int idx = chart.allNotesSorted.indexOf(note);
+                            int idx = note.sortedIndex;
                             if (idx >= 0 && !recordedHoldPressNotes.contains(idx)) {
                                 recordedHoldPressNotes.add(idx);
                                 ReplayData.ReplayEntry pe = new ReplayData.ReplayEntry();
@@ -5980,10 +6001,13 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
         try {
         for (int i = 0; i < nSize; i++) {
             Note n = notes.get(i);
-            if (n == null || !n.holdActive || n.judgeResult >= 0) continue;
+            if (n == null) continue;
+            if (n.holdFxActive) {
+                spawnDueHoldBodyHitEffects(n, tChart);
+            }
+            if (!n.holdActive || n.judgeResult >= 0) continue;
 
             if (!n.clicked && tChart >= n.sect) n.clicked = true;
-            spawnDueHoldBodyHitEffects(n, tChart);
 
             // Hold tail pre-judge
             if ((n.holdEndTime - tChart) / spd <= limitBad) {
@@ -6031,6 +6055,7 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
         }
         } catch (Throwable t) { /* prevent crash */ }
 
+        recycleJudgeEvents(judgeList);
     }
 
     /**
@@ -6306,6 +6331,42 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
         float y;
     }
 
+    private static final class JudgeEvent {
+        float offsetX;
+        float offsetY;
+        int type;          // 1=Click, 2=Hold/Drag, 3=Flick/Move
+        boolean judged;
+        FlickTracker event; // Flick tracker reference (type 3 only)
+        int touchId;
+
+        void set(float ox, float oy, int type, FlickTracker evt, int tid) {
+            this.offsetX = ox;
+            this.offsetY = oy;
+            this.type = type;
+            this.judged = false;
+            this.event = evt;
+            this.touchId = tid;
+        }
+    }
+
+    private JudgeEvent obtainJudgeEvent(float ox, float oy, int type, FlickTracker evt, int tid) {
+        int last = judgeEventPool.size() - 1;
+        JudgeEvent je = last >= 0 ? judgeEventPool.remove(last) : new JudgeEvent();
+        je.set(ox, oy, type, evt, tid);
+        return je;
+    }
+
+    private void recycleJudgeEvents(@NonNull ArrayList<JudgeEvent> events) {
+        for (int i = 0; i < events.size(); i++) {
+            JudgeEvent je = events.get(i);
+            if (je != null) {
+                je.event = null;
+                judgeEventPool.add(je);
+            }
+        }
+        events.clear();
+    }
+
     /**
      * Flick direction tracker with projected-speed hysteresis.
      * Starts flicking at speed > 1.0, stops at < 0.5. 'flicked' flag prevents gesture reuse.
@@ -6380,6 +6441,8 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
         final int numOfParts;
         final float[] effectRotateDeg = new float[4];
         final float[] effectRBase = new float[4];
+        final float[] effectDirX = new float[4];
+        final float[] effectDirY = new float[4];
         final float lineRotDeg;
 
         HitEffect(float timeSec, float x, float y, float r, float g, float b, float a, int numOfParts, float lineRotDeg) {
@@ -6394,6 +6457,9 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
             this.lineRotDeg = lineRotDeg;
             for (int i = 0; i < 4; i++) {
                 effectRotateDeg[i] = (float) (Math.random() * 360f);
+                double rad = effectRotateDeg[i] * Math.PI / 180.0;
+                effectDirX[i] = (float) Math.cos(rad);
+                effectDirY[i] = (float) Math.sin(rad);
                 effectRBase[i] = 185f + (float) (Math.random() * (265f - 185f));
             }
         }
@@ -6442,17 +6508,36 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
 
         float hw = w * 0.5f;
         float hh = h * 0.5f;
-        double rad = Math.toRadians(rotationDeg);
-        float cos = (float) Math.cos(rad);
-        float sin = (float) Math.sin(rad);
-        float tlx = -hw * cos + hh * sin;
-        float tly = -hw * sin - hh * cos;
-        float trx =  hw * cos + hh * sin;
-        float try_ = hw * sin - hh * cos;
-        float blx = -hw * cos - hh * sin;
-        float bly = -hw * sin + hh * cos;
-        float brx =  hw * cos - hh * sin;
-        float bry =  hw * sin + hh * cos;
+        float tlx;
+        float tly;
+        float trx;
+        float try_;
+        float blx;
+        float bly;
+        float brx;
+        float bry;
+        if (rotationDeg == 0f) {
+            tlx = -hw;
+            tly = -hh;
+            trx = hw;
+            try_ = -hh;
+            blx = -hw;
+            bly = hh;
+            brx = hw;
+            bry = hh;
+        } else {
+            double rad = Math.toRadians(rotationDeg);
+            float cos = (float) Math.cos(rad);
+            float sin = (float) Math.sin(rad);
+            tlx = -hw * cos + hh * sin;
+            tly = -hw * sin - hh * cos;
+            trx =  hw * cos + hh * sin;
+            try_ = hw * sin - hh * cos;
+            blx = -hw * cos - hh * sin;
+            bly = -hw * sin + hh * cos;
+            brx =  hw * cos - hh * sin;
+            bry =  hw * sin + hh * cos;
+        }
 
         // Per-quad UV swap (u0↔u1) mirrors the texture without shifting
         // spritesheet frame columns — unlike the shader-level vTex.x flip.
@@ -6709,9 +6794,8 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
 
             for (int pi = 0; pi < item.numOfParts; pi++) {
                 float r = s * item.effectRBase[pi] * k;
-                double prad = item.effectRotateDeg[pi] * Math.PI / 180.0;
-                float rx = x + (float) (r * Math.cos(prad));
-                float ry = y + (float) (r * Math.sin(prad));
+                float rx = x + r * item.effectDirX[pi];
+                float ry = y + r * item.effectDirY[pi];
                 
                 boolean pfColor = !item.note.isHold || item.note.holdPerfect;
                 float pr = pfColor ? skinPColor[0] : skinGColor[0];
@@ -6755,19 +6839,30 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
         return note.judgeResult >= 0;
     }
 
+    private static <T> void removeExpiredPrefix(@NonNull ArrayList<T> list, int count) {
+        if (count <= 0) return;
+        if (count >= list.size()) {
+            list.clear();
+            return;
+        }
+        list.subList(0, count).clear();
+    }
+
     private void drawBadEffects(double tChart) {
         if (badEffects.isEmpty()) return;
         final float badTime = 0.5f;
         final double tVis = visualTimeSec;
 
-        while (!badEffects.isEmpty()) {
-            BadEffect e = badEffects.get(0);
+        int expired = 0;
+        while (expired < badEffects.size()) {
+            BadEffect e = badEffects.get(expired);
             if (tVis - e.timeSec > badTime) {
-                badEffects.remove(0);
+                expired++;
             } else {
                 break;
             }
         }
+        removeExpiredPrefix(badEffects, expired);
         if (badEffects.isEmpty()) return;
 
         Texture current = null;
@@ -6805,14 +6900,16 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
         float noteWidth = stageW * 0.1234375f * keyScale;
         float effectSize = noteWidth * 1.375f * 1.12f * skinHitFxScale;
 
-        while (!hitEffects.isEmpty()) {
-            HitEffect e = hitEffects.get(0);
+        int expired = 0;
+        while (expired < hitEffects.size()) {
+            HitEffect e = hitEffects.get(expired);
             if (e.timeSec + dur < tVis) {
-                hitEffects.remove(0);
+                expired++;
             } else {
                 break;
             }
         }
+        removeExpiredPrefix(hitEffects, expired);
         if (hitEffects.isEmpty()) return;
 
         // 1. Spritesheet: premultiplied-alpha shader/blend.
@@ -6871,9 +6968,8 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
 
                 for (int pi = 0; pi < item.numOfParts; pi++) {
                     float rr = s * item.effectRBase[pi] * k;
-                    double prad = item.effectRotateDeg[pi] * Math.PI / 180.0;
-                    float rx = item.x + (float) (rr * Math.cos(prad));
-                    float ry = item.y + (float) (rr * Math.sin(prad));
+                    float rx = item.x + rr * item.effectDirX[pi];
+                    float ry = item.y + rr * item.effectDirY[pi];
                     addQuadToBatch(rx, ry, size, size, 0f,
                             item.r, item.g, item.b, alpha,
                             0f, 0f, 1f, 1f);
@@ -7294,12 +7390,16 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
             float areaL, float areaT, float areaR, float areaB
     ) {
         if (!(w > 0f) || !(h > 0f)) return false;
+        float halfW = w * 0.5f;
+        float halfH = h * 0.5f;
+        if (rotationDeg == 0f) {
+            return !(cx + halfW < areaL || cx - halfW > areaR
+                    || cy + halfH < areaT || cy - halfH > areaB);
+        }
         // Exact AABB of a rotated rectangle.
         double rad = rotationDeg * Math.PI / 180.0;
         float cos = (float) Math.abs(Math.cos(rad));
         float sin = (float) Math.abs(Math.sin(rad));
-        float halfW = w * 0.5f;
-        float halfH = h * 0.5f;
         float extX = halfW * cos + halfH * sin;
         float extY = halfW * sin + halfH * cos;
         float minX = cx - extX;

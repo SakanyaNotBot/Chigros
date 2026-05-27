@@ -66,6 +66,14 @@
     <string name="section_music_volume">音楽音量</string>
     <string name="section_sfx_volume">打鍵音量</string>
     <string name="section_music_speed">音楽速度</string>
+    <string name="section_audio_offset">遅延キャリブレーション</string>
+    <string name="action_open_calibration">キャリブレーション開始</string>
+    <string name="calibration_title">遅延キャリブレーション</string>
+    <string name="calibration_offset_format">%1$d ms</string>
+    <string name="calibration_hint">拍に合わせて左側をタップしてください。音と同時にノーツが判定ラインへ到達するよう調整します。</string>
+    <string name="calibration_reset">リセット</string>
+    <string name="calibration_done">完了</string>
+    <string name="calibration_load_failed">キャリブレーション音声の読み込みに失敗しました：%1$s</string>
 
     <string name="setting_replay_recording">リプレイ記録を有効化</string>
     <string name="section_replay_manage">リプレイ管理</string>

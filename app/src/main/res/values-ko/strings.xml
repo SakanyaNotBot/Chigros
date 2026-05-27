@@ -66,6 +66,14 @@
     <string name="section_music_volume">음악 볼륨</string>
     <string name="section_sfx_volume">타격음 볼륨</string>
     <string name="section_music_speed">음악 속도</string>
+    <string name="section_audio_offset">지연 보정</string>
+    <string name="action_open_calibration">보정 시작</string>
+    <string name="calibration_title">지연 보정</string>
+    <string name="calibration_offset_format">%1$d ms</string>
+    <string name="calibration_hint">박자에 맞춰 왼쪽 영역을 터치하세요. 노트가 소리와 함께 판정선에 닿도록 조정합니다.</string>
+    <string name="calibration_reset">초기화</string>
+    <string name="calibration_done">완료</string>
+    <string name="calibration_load_failed">보정 오디오를 불러오지 못했습니다: %1$s</string>
 
     <string name="setting_replay_recording">리플레이 기록 활성화</string>
     <string name="section_replay_manage">리플레이 관리</string>

@@ -72,6 +72,7 @@ public class PlayActivity extends AppCompatActivity implements GameRenderer.Call
     public static final String EXTRA_DIFFICULTY = "extra_difficulty";
     public static final String EXTRA_ASPECT_RATIO = "extra_aspect_ratio";
     public static final String EXTRA_CHART_OFFSET_MS = "extra_chart_offset_ms";
+    public static final String EXTRA_AUDIO_OFFSET_MS = "extra_audio_offset_ms";
     public static final String EXTRA_MUSIC_SPEED = "extra_music_speed";
     public static final String EXTRA_KEY_SCALE = "extra_key_scale";
     public static final String EXTRA_SCROLL_SPEED = "extra_scroll_speed";
@@ -98,6 +99,7 @@ public class PlayActivity extends AppCompatActivity implements GameRenderer.Call
     private String difficulty;
     private float aspectRatio = 0f;
     private int chartOffsetMs = 0;
+    private int audioOffsetMs = 0;
     private float musicSpeed = 1.0f;
     private float keyScale = 1.0f;
     private float scrollSpeed = 1.0f;
@@ -162,6 +164,7 @@ public class PlayActivity extends AppCompatActivity implements GameRenderer.Call
         difficulty = getIntent().getStringExtra(EXTRA_DIFFICULTY);
         aspectRatio = getIntent().getFloatExtra(EXTRA_ASPECT_RATIO, 0f);
         chartOffsetMs = getIntent().getIntExtra(EXTRA_CHART_OFFSET_MS, 0);
+        audioOffsetMs = getIntent().getIntExtra(EXTRA_AUDIO_OFFSET_MS, 0);
         musicSpeed = getIntent().getFloatExtra(EXTRA_MUSIC_SPEED, 1.0f);
         keyScale = getIntent().getFloatExtra(EXTRA_KEY_SCALE, 1.0f);
         scrollSpeed = getIntent().getFloatExtra(EXTRA_SCROLL_SPEED, 1.0f);
@@ -319,7 +322,7 @@ public class PlayActivity extends AppCompatActivity implements GameRenderer.Call
 
             NativeAudioEngine.prepareDefaultSfxIfMissing();
 
-            float userOffsetSec = chartOffsetMs / 1000.0f;
+            float userOffsetSec = (chartOffsetMs + audioOffsetMs) / 1000.0f;
             if (replayMode && replayPath != null) {
                 try {
                     File replayFile = new File(replayPath);
@@ -752,6 +755,7 @@ public class PlayActivity extends AppCompatActivity implements GameRenderer.Call
             playBundle.putString(EXTRA_DIFFICULTY, difficulty);
             playBundle.putFloat(EXTRA_ASPECT_RATIO, aspectRatio);
             playBundle.putInt(EXTRA_CHART_OFFSET_MS, chartOffsetMs);
+            playBundle.putInt(EXTRA_AUDIO_OFFSET_MS, audioOffsetMs);
             playBundle.putFloat(EXTRA_MUSIC_SPEED, musicSpeed);
             playBundle.putFloat(EXTRA_KEY_SCALE, keyScale);
             playBundle.putFloat(EXTRA_SCROLL_SPEED, scrollSpeed);

@@ -66,6 +66,14 @@
     <string name="section_music_volume">Musiklautstärke</string>
     <string name="section_sfx_volume">Hitsound-Lautstärke</string>
     <string name="section_music_speed">Musikgeschwindigkeit</string>
+    <string name="section_audio_offset">Latenzkalibrierung</string>
+    <string name="action_open_calibration">Kalibrierung starten</string>
+    <string name="calibration_title">Latenzkalibrierung</string>
+    <string name="calibration_offset_format">%1$d ms</string>
+    <string name="calibration_hint">Tippe im linken Bereich zum Takt. Passe den Wert an, bis die Note zusammen mit dem Ton die Urteilslinie erreicht.</string>
+    <string name="calibration_reset">Zurücksetzen</string>
+    <string name="calibration_done">Fertig</string>
+    <string name="calibration_load_failed">Kalibrierungsaudio konnte nicht geladen werden: %1$s</string>
 
     <string name="setting_replay_recording">Replay-Aufzeichnung aktivieren</string>
     <string name="section_replay_manage">Replay-Verwaltung</string>

@@ -66,6 +66,14 @@
     <string name="section_music_volume">Громкость музыки</string>
     <string name="section_sfx_volume">Громкость звуков нажатий</string>
     <string name="section_music_speed">Скорость музыки</string>
+    <string name="section_audio_offset">Калибровка задержки</string>
+    <string name="action_open_calibration">Начать калибровку</string>
+    <string name="calibration_title">Калибровка задержки</string>
+    <string name="calibration_offset_format">%1$d мс</string>
+    <string name="calibration_hint">Нажимайте в левой области в ритм. Настройте значение так, чтобы нота достигала линии оценки вместе со звуком.</string>
+    <string name="calibration_reset">Сброс</string>
+    <string name="calibration_done">Готово</string>
+    <string name="calibration_load_failed">Не удалось загрузить аудио калибровки: %1$s</string>
 
     <string name="setting_replay_recording">Включить запись повторов</string>
     <string name="section_replay_manage">Управление повторами</string>

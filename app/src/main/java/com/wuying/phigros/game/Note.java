@@ -54,6 +54,7 @@ public class Note {
     public transient boolean holdActive = false;
     public transient boolean holdPerfect = false;
     public transient boolean holdPreJudge = false;
+    public transient boolean holdFxActive = false;
     public transient double holdUpTimeSec = Double.POSITIVE_INFINITY;
     public transient double holdDiffSec = 0.0;
     public transient double holdFxAtSec = Double.NaN;
@@ -74,6 +75,7 @@ public class Note {
     public transient boolean scored = false;
     public transient double statOffset = 0.0;
     public transient int frameCount = 0;
+    public transient int sortedIndex = -1;
 
     /** Pre-computed appear time (seconds) for prpr-compatible pe-alpha extension. */
     public transient double cachedAppearSec = Double.NaN;

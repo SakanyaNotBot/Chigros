@@ -1,5 +1,6 @@
 package com.wuying.phigros.ui;
 
+import android.content.Intent;
 import android.os.Bundle;
 import android.text.Editable;
 import android.text.TextUtils;
@@ -10,6 +11,8 @@ import android.view.ViewGroup;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.fragment.app.Fragment;
 
 import com.google.android.material.slider.Slider;
@@ -26,8 +29,25 @@ public class SelectAudioFragment extends Fragment {
     private Slider sliderSfxVol;
     private TextInputEditText etSpeed;
     private Slider sliderSpeed;
+    private TextInputEditText etAudioOffset;
+    private Slider sliderAudioOffset;
+    private View btnCalibration;
+    private ActivityResultLauncher<Intent> calibrationLauncher;
 
     private boolean suppress = false;
+
+    @Override
+    public void onCreate(@Nullable Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        calibrationLauncher = registerForActivityResult(
+                new ActivityResultContracts.StartActivityForResult(),
+                result -> {
+                    if (result == null || result.getData() == null) return;
+                    int ms = result.getData().getIntExtra(CalibrationActivity.EXTRA_AUDIO_OFFSET_MS, host().getAudioOffsetMs());
+                    host().setAudioOffsetMs(ms);
+                    refreshFromActivity();
+                });
+    }
 
     @Nullable
     @Override
@@ -43,6 +63,9 @@ public class SelectAudioFragment extends Fragment {
         sliderSfxVol = view.findViewById(R.id.slider_sfx_volume);
         etSpeed = view.findViewById(R.id.et_music_speed);
         sliderSpeed = view.findViewById(R.id.slider_music_speed);
+        etAudioOffset = view.findViewById(R.id.et_audio_offset);
+        sliderAudioOffset = view.findViewById(R.id.slider_audio_offset);
+        btnCalibration = view.findViewById(R.id.btn_open_calibration);
 
         if (sliderMusicVol != null) {
             sliderMusicVol.setValueFrom(0f);
@@ -128,6 +151,41 @@ public class SelectAudioFragment extends Fragment {
             });
         }
 
+        if (sliderAudioOffset != null) {
+            sliderAudioOffset.setValueFrom(-500f);
+            sliderAudioOffset.setValueTo(500f);
+            sliderAudioOffset.setStepSize(1f);
+            sliderAudioOffset.addOnChangeListener((slider, value, fromUser) -> {
+                if (suppress) return;
+                int v = clampInt(Math.round(value), -500, 500);
+                host().setAudioOffsetMs(v);
+                suppress = true;
+                if (etAudioOffset != null) etAudioOffset.setText(String.valueOf(v));
+                suppress = false;
+            });
+        }
+        if (etAudioOffset != null) {
+            etAudioOffset.addTextChangedListener(new SimpleWatcher() {
+                @Override
+                public void afterTextChanged(Editable s) {
+                    if (suppress) return;
+                    int v = parseIntSafe(s == null ? "" : s.toString(), host().getAudioOffsetMs());
+                    v = clampInt(v, -500, 500);
+                    host().setAudioOffsetMs(v);
+                    suppress = true;
+                    if (sliderAudioOffset != null) sliderAudioOffset.setValue(v);
+                    suppress = false;
+                }
+            });
+        }
+        if (btnCalibration != null) {
+            btnCalibration.setOnClickListener(v -> {
+                Intent intent = new Intent(requireContext(), CalibrationActivity.class);
+                intent.putExtra(CalibrationActivity.EXTRA_AUDIO_OFFSET_MS, host().getAudioOffsetMs());
+                calibrationLauncher.launch(intent);
+            });
+        }
+
         refreshFromActivity();
     }
 
@@ -143,12 +201,15 @@ public class SelectAudioFragment extends Fragment {
         int mv = clampInt(a.getMusicVolumePct(), 0, 500);
         int sv = clampInt(a.getSfxVolumePct(), 0, 500);
         float sp = clamp(a.getMusicSpeed(), 0.5f, 2.0f);
+        int ao = clampInt(a.getAudioOffsetMs(), -500, 500);
         if (etMusicVol != null) etMusicVol.setText(String.valueOf(mv));
         if (sliderMusicVol != null) sliderMusicVol.setValue(mv);
         if (etSfxVol != null) etSfxVol.setText(String.valueOf(sv));
         if (sliderSfxVol != null) sliderSfxVol.setValue(sv);
         if (etSpeed != null) etSpeed.setText(formatFloat(sp));
         if (sliderSpeed != null) sliderSpeed.setValue(sp);
+        if (etAudioOffset != null) etAudioOffset.setText(String.valueOf(ao));
+        if (sliderAudioOffset != null) sliderAudioOffset.setValue(ao);
         suppress = false;
     }
 

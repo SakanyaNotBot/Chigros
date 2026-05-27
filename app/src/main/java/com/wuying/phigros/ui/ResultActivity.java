@@ -283,6 +283,7 @@ public class ResultActivity extends AppCompatActivity {
                 settings.musicVolPct = (int)(playBundle.getFloat(PlayActivity.EXTRA_MUSIC_VOLUME, 1.0f) * 100);
                 settings.sfxVolPct = (int)(playBundle.getFloat(PlayActivity.EXTRA_SFX_VOLUME, 1.0f) * 100);
                 settings.chartOffsetMs = playBundle.getInt(PlayActivity.EXTRA_CHART_OFFSET_MS, 0);
+                settings.audioOffsetMs = playBundle.getInt(PlayActivity.EXTRA_AUDIO_OFFSET_MS, 0);
             }
             String uuid = ReplayManager.savePersistedReplay(this, replayData, chartFile, musicFile, bgFile, settings);
             if (uuid == null) {

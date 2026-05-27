@@ -2,6 +2,7 @@ package com.wuying.phigros.ui;
 
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.Context;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Build;
@@ -49,6 +50,7 @@ public class ChartSelectActivity extends AppCompatActivity {
     private static final String PREF_MUSIC_VOL_PCT = "music_vol_pct";
     private static final String PREF_SFX_VOL_PCT = "sfx_vol_pct";
     private static final String PREF_MUSIC_SPEED = "music_speed";
+    private static final String PREF_AUDIO_OFFSET_MS = "audio_offset_ms";
     private static final String PREF_SCROLL_SPEED = "scroll_speed";
     private static final String PREF_REPLAY_ENABLED = "replay_enabled";
     private static final float BG_DIM_MIN = 0.3f;
@@ -95,6 +97,7 @@ public class ChartSelectActivity extends AppCompatActivity {
     private int musicVolumePct = 100;
     private int sfxVolumePct = 100;
     private float musicSpeed = 1.0f;
+    private int audioOffsetMs = 0;
 
     private ActivityResultLauncher<String[]> pickMusicLauncher;
     private ActivityResultLauncher<String[]> pickChartLauncher;
@@ -404,6 +407,7 @@ public class ChartSelectActivity extends AppCompatActivity {
         int offsetMs = chartOffsetMs;
         if (offsetMs > 5000) offsetMs = 5000;
         if (offsetMs < -5000) offsetMs = -5000;
+        int audioOffset = clampInt(audioOffsetMs, -500, 500);
 
         Intent it = new Intent(this, PlayActivity.class);
         it.putExtra(PlayActivity.EXTRA_MUSIC_PATH, musicFile.getAbsolutePath());
@@ -414,6 +418,7 @@ public class ChartSelectActivity extends AppCompatActivity {
 
         it.putExtra(PlayActivity.EXTRA_ASPECT_RATIO, aspectRatio <= 0f ? 0f : aspectRatio);
         it.putExtra(PlayActivity.EXTRA_CHART_OFFSET_MS, offsetMs);
+        it.putExtra(PlayActivity.EXTRA_AUDIO_OFFSET_MS, audioOffset);
         it.putExtra(PlayActivity.EXTRA_MUSIC_SPEED, musicSpeed);
         it.putExtra(PlayActivity.EXTRA_KEY_SCALE, keyScale);
         it.putExtra(PlayActivity.EXTRA_SCROLL_SPEED, scrollSpeed);
@@ -561,6 +566,8 @@ public class ChartSelectActivity extends AppCompatActivity {
     public void setSfxVolumePct(int v)   { sfxVolumePct = clampInt(v, 0, 500); editPrefs().putInt(PREF_SFX_VOL_PCT, sfxVolumePct).apply(); }
     public float getMusicSpeed()         { return musicSpeed; }
     public void setMusicSpeed(float v)   { musicSpeed = clampFinite(v, 0.5f, 2.0f, 1.0f); editPrefs().putFloat(PREF_MUSIC_SPEED, musicSpeed).apply(); }
+    public int getAudioOffsetMs()        { return audioOffsetMs; }
+    public void setAudioOffsetMs(int v)  { audioOffsetMs = clampInt(v, -500, 500); editPrefs().putInt(PREF_AUDIO_OFFSET_MS, audioOffsetMs).apply(); }
     public boolean isReplayEnabled()     { return replayEnabled; }
     public void setReplayEnabled(boolean v) { replayEnabled = v; editPrefs().putBoolean(PREF_REPLAY_ENABLED, replayEnabled).apply(); }
 
@@ -583,6 +590,7 @@ public class ChartSelectActivity extends AppCompatActivity {
         musicVolumePct = clampInt(p.getInt(PREF_MUSIC_VOL_PCT, musicVolumePct), 0, 500);
         sfxVolumePct = clampInt(p.getInt(PREF_SFX_VOL_PCT, sfxVolumePct), 0, 500);
         musicSpeed = clampFinite(p.getFloat(PREF_MUSIC_SPEED, musicSpeed), 0.5f, 2.0f, 1.0f);
+        audioOffsetMs = clampInt(p.getInt(PREF_AUDIO_OFFSET_MS, audioOffsetMs), -500, 500);
     }
 
     private SharedPreferences getPrefs() {
@@ -590,6 +598,12 @@ public class ChartSelectActivity extends AppCompatActivity {
             prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
         }
         return prefs;
+    }
+
+    public static boolean isApfcIndicatorEnabled(Context context) {
+        return context != null
+                && context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                .getBoolean(PREF_APFC, false);
     }
 
     private SharedPreferences.Editor editPrefs() {

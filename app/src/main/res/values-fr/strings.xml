@@ -66,6 +66,14 @@
     <string name="section_music_volume">Volume de la musique</string>
     <string name="section_sfx_volume">Volume des sons de frappe</string>
     <string name="section_music_speed">Vitesse de la musique</string>
+    <string name="section_audio_offset">Calibrage de latence</string>
+    <string name="action_open_calibration">Démarrer le calibrage</string>
+    <string name="calibration_title">Calibrage de latence</string>
+    <string name="calibration_offset_format">%1$d ms</string>
+    <string name="calibration_hint">Touchez la zone gauche sur le rythme. Ajustez jusqu’à ce que la note atteigne la ligne de jugement avec le son.</string>
+    <string name="calibration_reset">Réinitialiser</string>
+    <string name="calibration_done">Terminé</string>
+    <string name="calibration_load_failed">Échec du chargement de l’audio de calibrage : %1$s</string>
 
     <string name="setting_replay_recording">Activer l’enregistrement des replays</string>
     <string name="section_replay_manage">Gestion des replays</string>

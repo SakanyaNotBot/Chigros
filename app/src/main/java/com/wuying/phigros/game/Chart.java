@@ -359,6 +359,10 @@ public class Chart {
 
         autoplayNotes.sort(Comparator.comparingDouble(a -> a.sect));
         allNotesSorted = autoplayNotes;
+        for (int i = 0; i < allNotesSorted.size(); i++) {
+            Note n = allNotesSorted.get(i);
+            if (n != null) n.sortedIndex = i;
+        }
 
         List<ClickEffectItem> eff = new ArrayList<>();
         for (JudgeLine line : judgeLineList) {

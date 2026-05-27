@@ -408,6 +408,7 @@ public class SelectReplayFragment extends Fragment {
             it.putExtra(PlayActivity.EXTRA_MUSIC_VOLUME, info.musicVolPct / 100f);
             it.putExtra(PlayActivity.EXTRA_SFX_VOLUME, info.sfxVolPct / 100f);
             it.putExtra(PlayActivity.EXTRA_CHART_OFFSET_MS, info.chartOffsetMs);
+            it.putExtra(PlayActivity.EXTRA_AUDIO_OFFSET_MS, info.audioOffsetMs);
         } else {
             it.putExtra(PlayActivity.EXTRA_ASPECT_RATIO, 0f);
             it.putExtra(PlayActivity.EXTRA_MUSIC_SPEED, 1.0f);
@@ -421,6 +422,7 @@ public class SelectReplayFragment extends Fragment {
             it.putExtra(PlayActivity.EXTRA_CHALLENGE, false);
             it.putExtra(PlayActivity.EXTRA_SHOW_FPS, false);
             it.putExtra(PlayActivity.EXTRA_SHOW_DEBUG, false);
+            it.putExtra(PlayActivity.EXTRA_AUDIO_OFFSET_MS, 0);
         }
 
         // Apply current skin

@@ -20,6 +20,7 @@
 # Keep Activities, Application, and their inherited framework methods
 -keep public class com.wuying.phigros.PhigrosApp extends android.app.Application { *; }
 -keep public class com.wuying.phigros.ui.ChartSelectActivity extends androidx.appcompat.app.AppCompatActivity { *; }
+-keep public class com.wuying.phigros.ui.CalibrationActivity extends androidx.appcompat.app.AppCompatActivity { *; }
 -keep public class com.wuying.phigros.ui.PlayActivity extends androidx.appcompat.app.AppCompatActivity { *; }
 -keep public class com.wuying.phigros.ui.ResultActivity extends androidx.appcompat.app.AppCompatActivity { *; }
 -keep public class com.wuying.phigros.ui.SelectAudioFragment extends androidx.fragment.app.Fragment { *; }

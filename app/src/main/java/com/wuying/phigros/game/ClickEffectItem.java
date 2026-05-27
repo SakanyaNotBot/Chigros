@@ -9,6 +9,8 @@ public class ClickEffectItem {
     public final int numOfParts;
     public final float[] effectRotateDeg;
     public final float[] effectRBase;
+    public final float[] effectDirX;
+    public final float[] effectDirY;
 
     /** Cached screen position — computed once on first render and reused. */
     public transient boolean positionCached = false;
@@ -30,8 +32,13 @@ public class ClickEffectItem {
         if (rnd == null) rnd = new Random();
         effectRotateDeg = new float[4];
         effectRBase = new float[4];
+        effectDirX = new float[4];
+        effectDirY = new float[4];
         for (int i = 0; i < 4; i++) {
             effectRotateDeg[i] = rnd.nextFloat() * 360f;
+            double rad = effectRotateDeg[i] * Math.PI / 180.0;
+            effectDirX[i] = (float) Math.cos(rad);
+            effectDirY[i] = (float) Math.sin(rad);
             effectRBase[i] = 185f + rnd.nextFloat() * (265f - 185f);
         }
     }
