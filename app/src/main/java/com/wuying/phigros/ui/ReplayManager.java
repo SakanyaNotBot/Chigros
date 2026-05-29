@@ -81,6 +81,9 @@ public final class ReplayManager {
     }
 
     public static void finishRecording(ReplayData data, PlayResult result, String songName, String difficulty) {
+        if (data.entries != null) {
+            Collections.sort(data.entries, (a, b) -> Double.compare(a.ts, b.ts));
+        }
         data.meta = ReplayData.ReplayMeta.fromPlayResult(result, songName, difficulty);
     }
 
@@ -267,10 +270,11 @@ public final class ReplayManager {
         info.chartRelPath = chartRelPath;
         info.musicRelPath = musicRelPath;
         info.bgRelPath = bgRelPath;
-        // Replay files should only pin the chart offset. Other playback settings
-        // intentionally come from the user's current preferences when replaying.
+        // Replay files pin timing-affecting result context. Other playback
+        // settings come from the user's current preferences when replaying.
         if (settings != null) {
             info.chartOffsetMs = settings.chartOffsetMs;
+            info.challenge = settings.challenge;
         }
         JSON_MAPPER.writeValue(new File(replayDir, "info.json"), info);
 
@@ -700,5 +704,6 @@ public final class ReplayManager {
         public String musicRelPath;
         public String bgRelPath;
         public int chartOffsetMs;
+        public boolean challenge;
     }
 }

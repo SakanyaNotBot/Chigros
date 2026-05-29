@@ -61,11 +61,6 @@ public class CalibrationActivity extends AppCompatActivity {
         @Override
         public void run() {
             if (audioReady) {
-                double duration = NativeAudioEngine.getMusicDurationSeconds();
-                double pos = NativeAudioEngine.getPlayheadSeconds();
-                if (duration > 0.0 && pos >= duration - 0.015) {
-                    NativeAudioEngine.restart();
-                }
                 if (calibrationView != null) {
                     calibrationView.invalidate();
                 }
@@ -87,6 +82,9 @@ public class CalibrationActivity extends AppCompatActivity {
             loadAudio();
             audioReady = true;
             NativeAudioEngine.start();
+            if (calibrationView != null) {
+                calibrationView.resetSmoothClock();
+            }
             handler.removeCallbacks(ticker);
             handler.post(ticker);
         } catch (Throwable e) {
@@ -238,6 +236,7 @@ public class CalibrationActivity extends AppCompatActivity {
         PcmDecoder.DecodedAudio cali = WavDecoder.decodeRawWavToFloatPcm(this, R.raw.calibration);
         PcmDecoder.DecodedAudio hit = WavDecoder.decodeRawWavToFloatPcm(this, R.raw.calibration_hit);
         NativeAudioEngine.setMusicData(cali.pcm, cali.length, cali.sampleRate, cali.channels);
+        NativeAudioEngine.setMusicLooping(true);
         NativeAudioEngine.setSfxData(GameConstants.NOTE_TAP, hit.pcm, hit.sampleRate, hit.channels);
         NativeAudioEngine.setPlaybackSpeed(1.0f);
         NativeAudioEngine.setMusicVolume(1.0f);
@@ -270,6 +269,9 @@ public class CalibrationActivity extends AppCompatActivity {
         applyImmersiveMode();
         if (audioReady) {
             NativeAudioEngine.pause(false);
+            if (calibrationView != null) {
+                calibrationView.resetSmoothClock();
+            }
             handler.removeCallbacks(ticker);
             handler.post(ticker);
         }
@@ -281,6 +283,7 @@ public class CalibrationActivity extends AppCompatActivity {
         handler.removeCallbacksAndMessages(null);
         audioReady = false;
         try {
+            NativeAudioEngine.setMusicLooping(false);
             NativeAudioEngine.stop();
             NativeAudioEngine.delete();
         } catch (Throwable ignored) {
@@ -315,6 +318,11 @@ public class CalibrationActivity extends AppCompatActivity {
     private static final class CalibrationView extends View {
         private static final int FALLBACK_HIT_FX_COLS = 6;
         private static final int FALLBACK_HIT_FX_ROWS = 5;
+        private static final long RENDERED_TAP_POSITION_MAX_AGE_NS = 120_000_000L;
+        private static final double CALIBRATION_LOOP_SECONDS = 2.0;
+        private static final double NOTE_HIT_TIME_SECONDS = 1.0;
+        private static final double NOTE_SPAWN_TIME_SECONDS = 1.5;
+        private static final double NOTE_FALL_SECONDS = 1.5;
 
         private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
         private final Paint bitmapPaint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.DITHER_FLAG);
@@ -328,8 +336,11 @@ public class CalibrationActivity extends AppCompatActivity {
         private int audioOffsetMs = 0;
         private int panelWidthPx = 0;
         private boolean wasBeforeHit = false;
-        private long touchMarkerStartMs = -1L;
-        private float touchMarkerY = 0f;
+        private final SmoothPlayheadClock smoothClock = new SmoothPlayheadClock();
+        private final ArrayList<TouchMarker> touchMarkers = new ArrayList<>();
+        private float lastRenderedTapY = 0f;
+        private long lastRenderedTapPositionNs = -1L;
+        private boolean lastRenderedTapVisible = false;
         private final boolean apfcIndicator;
         private LinearGradient bgGradient;
         private int bgW = -1;
@@ -354,6 +365,13 @@ public class CalibrationActivity extends AppCompatActivity {
             this.panelWidthPx = panelWidthPx;
         }
 
+        void resetSmoothClock() {
+            smoothClock.reset();
+            wasBeforeHit = false;
+            lastRenderedTapPositionNs = -1L;
+            lastRenderedTapVisible = false;
+        }
+
         @Override
         protected void onDraw(Canvas canvas) {
             super.onDraw(canvas);
@@ -376,22 +394,24 @@ public class CalibrationActivity extends AppCompatActivity {
 
             float playRight = Math.max(w * 0.55f, w - panelWidthPx);
             float centerX = playRight * 0.5f;
-            float lineY = h * 0.58f;
-            float travel = h * 0.44f;
+            float lineHalfWidth = judgeLineHalfWidth(playRight);
+            float lineLeft = centerX - lineHalfWidth;
+            float lineRight = centerX + lineHalfWidth;
+            float lineY = judgeLineY(h);
             float noteW = playRight * 0.1234375f;
             float noteH = tapBitmap != null
                     ? noteW * tapBitmap.getHeight() / Math.max(1f, tapBitmap.getWidth())
                     : noteW * 0.36f;
 
             paint.setColor(indicatorColor(apfcIndicator));
-            canvas.drawRect(centerX - playRight * 0.28f, lineY - dp(2), centerX + playRight * 0.28f, lineY + dp(2), paint);
+            canvas.drawRect(lineLeft, lineY - dp(2), lineRight, lineY + dp(2), paint);
 
-            double cycle = NativeAudioEngine.getPlayheadSeconds() - audioOffsetMs / 1000.0;
-            cycle = cycle - Math.floor(cycle / 2.0) * 2.0;
-            if (cycle < 0.0) cycle += 2.0;
+            double loopTime = currentLoopTime();
+            double noteProgress = noteDrawProgressForLoopTime(loopTime);
+            rememberRenderedTapPosition(noteMarkerProgressForLoopTime(loopTime), lineY, h);
 
-            if (cycle <= 1.0) {
-                float y = (float) (lineY - travel + travel * cycle);
+            if (Double.isFinite(noteProgress)) {
+                float y = tapYForProgress(lineY, noteProgress);
                 drawTap(canvas, centerX, y, noteW, noteH);
                 wasBeforeHit = true;
             } else {
@@ -403,7 +423,7 @@ public class CalibrationActivity extends AppCompatActivity {
             }
 
             drawHitEffects(canvas, playRight, noteW);
-            drawTouchMarker(canvas, centerX, playRight, lineY);
+            drawTouchMarkers(canvas, centerX, touchMarkerLineWidth(w, centerX));
             postInvalidateOnAnimation();
         }
 
@@ -470,28 +490,40 @@ public class CalibrationActivity extends AppCompatActivity {
             }
         }
 
-        private void drawTouchMarker(Canvas canvas, float centerX, float playRight, float lineY) {
-            long start = touchMarkerStartMs;
-            if (start <= 0L) return;
-            float elapsed = (System.currentTimeMillis() - start) / 800f;
-            if (elapsed >= 1f) {
-                touchMarkerStartMs = -1L;
-                return;
+        private void drawTouchMarkers(Canvas canvas, float centerX, float lineWidth) {
+            if (touchMarkers.isEmpty()) return;
+            long now = System.currentTimeMillis();
+            float halfThickness = dp(1);
+            Iterator<TouchMarker> iterator = touchMarkers.iterator();
+            while (iterator.hasNext()) {
+                TouchMarker marker = iterator.next();
+                float progress = (now - marker.startMs) / 1000f;
+                if (progress >= 1f) {
+                    iterator.remove();
+                    continue;
+                }
+                if (progress < 0f) progress = 0f;
+                float alpha = 1f - progress;
+                paint.setColor(Color.argb(Math.round(255 * alpha), 255, 255, 255));
+                float half = lineWidth * 0.5f * progress;
+                canvas.drawRect(centerX - half, marker.y - halfThickness,
+                        centerX + half, marker.y + halfThickness, paint);
             }
-            float alpha = elapsed <= 0.5f ? 1f : (1f - elapsed) * 2f;
-            paint.setColor(Color.argb(Math.round(210 * alpha), 255, 255, 255));
-            float half = playRight * 0.22f;
-            canvas.drawRect(centerX - half, touchMarkerY - dp(2), centerX + half, touchMarkerY + dp(2), paint);
         }
 
         @Override
         public boolean onTouchEvent(MotionEvent event) {
             if (event == null) return true;
-            if (event.getActionMasked() == MotionEvent.ACTION_DOWN) {
-                if (event.getX() < getWidth() - panelWidthPx) {
-                    touchMarkerStartMs = System.currentTimeMillis();
-                    touchMarkerY = currentNoteY();
-                    invalidate();
+            int action = event.getActionMasked();
+            if (action == MotionEvent.ACTION_DOWN || action == MotionEvent.ACTION_POINTER_DOWN) {
+                int index = event.getActionIndex();
+                if (index >= 0 && index < event.getPointerCount()
+                        && event.getX(index) < getWidth() - panelWidthPx) {
+                    float y = currentNoteY();
+                    if (!Float.isNaN(y)) {
+                        touchMarkers.add(new TouchMarker(System.currentTimeMillis(), y));
+                        invalidate();
+                    }
                 }
                 return true;
             }
@@ -499,18 +531,79 @@ public class CalibrationActivity extends AppCompatActivity {
         }
 
         private float currentNoteY() {
+            long nowNs = System.nanoTime();
+            if (lastRenderedTapPositionNs > 0L
+                    && nowNs - lastRenderedTapPositionNs <= RENDERED_TAP_POSITION_MAX_AGE_NS) {
+                return lastRenderedTapVisible ? lastRenderedTapY : Float.NaN;
+            }
             int h = getHeight();
-            float lineY = h * 0.58f;
-            float travel = h * 0.44f;
-            double cycle = NativeAudioEngine.getPlayheadSeconds() - audioOffsetMs / 1000.0;
-            cycle = cycle - Math.floor(cycle / 2.0) * 2.0;
-            if (cycle < 0.0) cycle += 2.0;
-            double visible = Math.min(2.0, Math.max(0.0, cycle));
-            return (float) (lineY - travel + travel * visible);
+            float lineY = judgeLineY(h);
+            double markerProgress = currentMarkerProgress();
+            float y = tapYForProgress(lineY, markerProgress);
+            return y >= 0f && y <= h ? y : Float.NaN;
         }
 
         private float dp(float value) {
             return value * getResources().getDisplayMetrics().density;
+        }
+
+        private double currentLoopTime() {
+            double t = smoothClock.getSeconds() - audioOffsetMs / 1000.0;
+            double loopTime = t - Math.floor(t / CALIBRATION_LOOP_SECONDS) * CALIBRATION_LOOP_SECONDS;
+            if (loopTime < 0.0) loopTime += CALIBRATION_LOOP_SECONDS;
+            return loopTime;
+        }
+
+        private double currentMarkerProgress() {
+            return noteMarkerProgressForLoopTime(currentLoopTime());
+        }
+
+        private void rememberRenderedTapPosition(double markerProgress, float lineY, int height) {
+            float markerY = tapYForProgress(lineY, markerProgress);
+            lastRenderedTapVisible = markerY >= 0f && markerY <= height;
+            if (lastRenderedTapVisible) {
+                lastRenderedTapY = markerY;
+            }
+            lastRenderedTapPositionNs = System.nanoTime();
+        }
+
+        private static float judgeLineHalfWidth(float playRight) {
+            return playRight * 0.28f;
+        }
+
+        private static float judgeLineY(int height) {
+            return height * 0.75f;
+        }
+
+        private static double noteDrawProgressForLoopTime(double loopTime) {
+            if (loopTime >= NOTE_SPAWN_TIME_SECONDS) {
+                return (loopTime - NOTE_SPAWN_TIME_SECONDS) / NOTE_FALL_SECONDS;
+            }
+            if (loopTime <= NOTE_HIT_TIME_SECONDS) {
+                return (loopTime + CALIBRATION_LOOP_SECONDS - NOTE_SPAWN_TIME_SECONDS) / NOTE_FALL_SECONDS;
+            }
+            return Double.NaN;
+        }
+
+        private static double noteMarkerProgressForLoopTime(double loopTime) {
+            if (loopTime >= NOTE_SPAWN_TIME_SECONDS) {
+                return (loopTime - NOTE_SPAWN_TIME_SECONDS) / NOTE_FALL_SECONDS;
+            }
+            return (loopTime + CALIBRATION_LOOP_SECONDS - NOTE_SPAWN_TIME_SECONDS) / NOTE_FALL_SECONDS;
+        }
+
+        private static float tapYForProgress(float lineY, double progress) {
+            return (float) (lineY * progress);
+        }
+
+        private static float touchMarkerLineWidth(int viewWidth, float centerX) {
+            return Math.max(centerX, viewWidth - centerX) * 2f;
+        }
+
+        private static float clamp(float v, float lo, float hi) {
+            if (v < lo) return lo;
+            if (v > hi) return hi;
+            return v;
         }
 
         private static int perfectColor() {
@@ -566,6 +659,108 @@ public class CalibrationActivity extends AppCompatActivity {
             } catch (Throwable ignored) {
             }
             return new int[]{FALLBACK_HIT_FX_COLS, FALLBACK_HIT_FX_ROWS};
+        }
+    }
+
+    private static final class TouchMarker {
+        final long startMs;
+        final float y;
+
+        TouchMarker(long startMs, float y) {
+            this.startMs = startMs;
+            this.y = y;
+        }
+    }
+
+    private static final class SmoothPlayheadClock {
+        private static final int BIAS_HISTORY_SIZE = 60;
+        private final double[] biasHistory = new double[BIAS_HISTORY_SIZE];
+        private boolean initialized = false;
+        private long lastFrameNs = 0L;
+        private double lastRawPlayheadSec = 0.0;
+        private double referencePlayheadSec = 0.0;
+        private long referenceTimeNs = 0L;
+        private int biasIndex = 0;
+        private int biasCount = 0;
+        private double biasSum = 0.0;
+
+        void reset() {
+            initialized = false;
+            lastFrameNs = 0L;
+            lastRawPlayheadSec = 0.0;
+            referencePlayheadSec = 0.0;
+            referenceTimeNs = 0L;
+            resetBiasHistory();
+        }
+
+        double getSeconds() {
+            double raw = NativeAudioEngine.getPlayheadSeconds();
+            if (!Double.isFinite(raw)) raw = 0.0;
+            long nowNs = System.nanoTime();
+
+            if (!initialized) {
+                initialized = true;
+                lastFrameNs = nowNs;
+                lastRawPlayheadSec = raw;
+                referencePlayheadSec = raw;
+                referenceTimeNs = nowNs;
+                resetBiasHistory();
+                return raw;
+            }
+
+            double dt = (nowNs - lastFrameNs) * 1e-9;
+            if (!Double.isFinite(dt) || dt < 0.0) dt = 0.0;
+            if (dt > 0.1) dt = 0.1;
+
+            double elapsedSinceRef = (nowNs - referenceTimeNs) * 1e-9;
+            double predicted = referencePlayheadSec + elapsedSinceRef;
+            double bias = predicted - raw;
+            addBias(bias);
+
+            double diff = raw - lastRawPlayheadSec;
+            boolean jumpedBack = diff < -0.1;
+            boolean bigJump = Math.abs(diff) > 0.5;
+
+            double out;
+            if (jumpedBack || bigJump || !Double.isFinite(predicted)) {
+                out = raw;
+                referencePlayheadSec = raw;
+                referenceTimeNs = nowNs;
+                resetBiasHistory();
+            } else {
+                double avgBias = biasCount == 0 ? 0.0 : biasSum / biasCount;
+                out = predicted - avgBias;
+                final double maxDeviation = 0.010;
+                if (out > raw + maxDeviation) out = raw + maxDeviation;
+                if (out < raw - maxDeviation) out = raw - maxDeviation;
+            }
+
+            lastFrameNs = nowNs;
+            lastRawPlayheadSec = raw;
+            return out;
+        }
+
+        private void resetBiasHistory() {
+            biasIndex = 0;
+            biasCount = 0;
+            biasSum = 0.0;
+        }
+
+        private void addBias(double bias) {
+            if (!Double.isFinite(bias)) return;
+            if (biasCount < BIAS_HISTORY_SIZE) {
+                biasHistory[biasIndex] = bias;
+                biasSum += bias;
+                biasCount++;
+            } else {
+                biasSum -= biasHistory[biasIndex];
+                biasHistory[biasIndex] = bias;
+                biasSum += bias;
+            }
+            biasIndex++;
+            if (biasIndex >= BIAS_HISTORY_SIZE) {
+                biasIndex = 0;
+            }
         }
     }
 

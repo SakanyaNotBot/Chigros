@@ -317,6 +317,14 @@
                     android:textColor="@color/select_text_primary" />
 
                 <com.google.android.material.switchmaterial.SwitchMaterial
+                    android:id="@+id/sw_chart_reveal"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:text="@string/setting_chart_reveal"
+                    android:textColor="@color/select_text_primary" />
+
+                <com.google.android.material.switchmaterial.SwitchMaterial
                     android:id="@+id/sw_multi_highlight"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
@@ -331,6 +339,22 @@
                     android:layout_marginTop="8dp"
                     android:text="@string/setting_apfc_indicator"
                     android:textColor="@color/select_text_primary" />
+
+                <com.google.android.material.textfield.TextInputLayout
+                    style="@style/SelectDropdown"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:hint="@string/setting_hit_offset_indicator"
+                    app:endIconMode="dropdown_menu">
+
+                    <com.google.android.material.textfield.MaterialAutoCompleteTextView
+                        android:id="@+id/act_hit_offset_indicator_mode"
+                        style="@style/SelectEditText"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:inputType="none" />
+                </com.google.android.material.textfield.TextInputLayout>
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
     </LinearLayout>

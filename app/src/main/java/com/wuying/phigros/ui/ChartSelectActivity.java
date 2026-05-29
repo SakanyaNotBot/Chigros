@@ -24,6 +24,7 @@ import com.google.android.material.tabs.TabLayout;
 import com.google.android.material.tabs.TabLayoutMediator;
 
 import com.wuying.phigros.R;
+import com.wuying.phigros.game.GameRenderer;
 import com.wuying.phigros.util.FileUtils;
 import com.wuying.phigros.util.InfoFileUtils;
 import com.wuying.phigros.util.ZipPackUtils;
@@ -45,8 +46,11 @@ public class ChartSelectActivity extends AppCompatActivity {
     private static final String PREF_ANTIALIAS = "antialias";
     private static final String PREF_SHOW_FPS = "show_fps";
     private static final String PREF_SHOW_DEBUG = "show_debug";
+    private static final String PREF_CHART_REVEAL = "chart_reveal";
     private static final String PREF_MULTI_HIGHLIGHT = "multi_highlight";
     private static final String PREF_APFC = "apfc";
+    private static final String PREF_HIT_OFFSET_INDICATOR = "hit_offset_indicator";
+    private static final String PREF_HIT_OFFSET_INDICATOR_MODE = "hit_offset_indicator_mode";
     private static final String PREF_MUSIC_VOL_PCT = "music_vol_pct";
     private static final String PREF_SFX_VOL_PCT = "sfx_vol_pct";
     private static final String PREF_MUSIC_SPEED = "music_speed";
@@ -90,8 +94,10 @@ public class ChartSelectActivity extends AppCompatActivity {
     private boolean antialias = false;
     private boolean showFps = false;
     private boolean showDebugInfo = false;
+    private boolean chartReveal = false;
     private boolean multiPressHighlight = true;
     private boolean apfcIndicator = false;
+    private int hitOffsetIndicatorMode = GameRenderer.HIT_OFFSET_INDICATOR_DISABLED;
     private boolean replayEnabled = false;
 
     private int musicVolumePct = 100;
@@ -430,8 +436,12 @@ public class ChartSelectActivity extends AppCompatActivity {
         it.putExtra(PlayActivity.EXTRA_ANTIALIAS, antialias);
         it.putExtra(PlayActivity.EXTRA_SHOW_FPS, showFps);
         it.putExtra(PlayActivity.EXTRA_SHOW_DEBUG, showDebugInfo);
+        it.putExtra(PlayActivity.EXTRA_CHART_REVEAL, chartReveal);
         it.putExtra(PlayActivity.EXTRA_MULTI_HIGHLIGHT, multiPressHighlight);
         it.putExtra(PlayActivity.EXTRA_APFC, apfcIndicator);
+        it.putExtra(PlayActivity.EXTRA_HIT_OFFSET_INDICATOR,
+                hitOffsetIndicatorMode != GameRenderer.HIT_OFFSET_INDICATOR_DISABLED);
+        it.putExtra(PlayActivity.EXTRA_HIT_OFFSET_INDICATOR_MODE, hitOffsetIndicatorMode);
         it.putExtra(PlayActivity.EXTRA_AUTOPLAY, autoplay);
         it.putExtra(PlayActivity.EXTRA_CHALLENGE, challengeMode);
 
@@ -556,10 +566,22 @@ public class ChartSelectActivity extends AppCompatActivity {
     public void setShowFps(boolean v)    { showFps = v; editPrefs().putBoolean(PREF_SHOW_FPS, showFps).apply(); }
     public boolean isShowDebugInfo()     { return showDebugInfo; }
     public void setShowDebugInfo(boolean v) { showDebugInfo = v; editPrefs().putBoolean(PREF_SHOW_DEBUG, showDebugInfo).apply(); }
+    public boolean isChartReveal()       { return chartReveal; }
+    public void setChartReveal(boolean v) { chartReveal = v; editPrefs().putBoolean(PREF_CHART_REVEAL, chartReveal).apply(); }
     public boolean isMultiPressHighlight()  { return multiPressHighlight; }
     public void setMultiPressHighlight(boolean v) { multiPressHighlight = v; editPrefs().putBoolean(PREF_MULTI_HIGHLIGHT, multiPressHighlight).apply(); }
     public boolean isApfcIndicator()     { return apfcIndicator; }
     public void setApfcIndicator(boolean v) { apfcIndicator = v; editPrefs().putBoolean(PREF_APFC, apfcIndicator).apply(); }
+    public boolean isHitOffsetIndicator(){ return hitOffsetIndicatorMode != GameRenderer.HIT_OFFSET_INDICATOR_DISABLED; }
+    public void setHitOffsetIndicator(boolean v) { setHitOffsetIndicatorMode(v ? GameRenderer.HIT_OFFSET_INDICATOR_SECTOR : GameRenderer.HIT_OFFSET_INDICATOR_DISABLED); }
+    public int getHitOffsetIndicatorMode() { return hitOffsetIndicatorMode; }
+    public void setHitOffsetIndicatorMode(int mode) {
+        hitOffsetIndicatorMode = GameRenderer.sanitizeHitOffsetIndicatorMode(mode);
+        editPrefs()
+                .putInt(PREF_HIT_OFFSET_INDICATOR_MODE, hitOffsetIndicatorMode)
+                .putBoolean(PREF_HIT_OFFSET_INDICATOR, isHitOffsetIndicator())
+                .apply();
+    }
     public int getMusicVolumePct()       { return musicVolumePct; }
     public void setMusicVolumePct(int v) { musicVolumePct = clampInt(v, 0, 500); editPrefs().putInt(PREF_MUSIC_VOL_PCT, musicVolumePct).apply(); }
     public int getSfxVolumePct()         { return sfxVolumePct; }
@@ -584,8 +606,17 @@ public class ChartSelectActivity extends AppCompatActivity {
         antialias = p.getBoolean(PREF_ANTIALIAS, antialias);
         showFps = p.getBoolean(PREF_SHOW_FPS, showFps);
         showDebugInfo = p.getBoolean(PREF_SHOW_DEBUG, showDebugInfo);
+        chartReveal = p.getBoolean(PREF_CHART_REVEAL, chartReveal);
         multiPressHighlight = p.getBoolean(PREF_MULTI_HIGHLIGHT, multiPressHighlight);
         apfcIndicator = p.getBoolean(PREF_APFC, apfcIndicator);
+        if (p.contains(PREF_HIT_OFFSET_INDICATOR_MODE)) {
+            hitOffsetIndicatorMode = GameRenderer.sanitizeHitOffsetIndicatorMode(
+                    p.getInt(PREF_HIT_OFFSET_INDICATOR_MODE, hitOffsetIndicatorMode));
+        } else if (p.getBoolean(PREF_HIT_OFFSET_INDICATOR, false)) {
+            hitOffsetIndicatorMode = GameRenderer.HIT_OFFSET_INDICATOR_SECTOR;
+        } else {
+            hitOffsetIndicatorMode = GameRenderer.HIT_OFFSET_INDICATOR_DISABLED;
+        }
         replayEnabled = p.getBoolean(PREF_REPLAY_ENABLED, replayEnabled);
         musicVolumePct = clampInt(p.getInt(PREF_MUSIC_VOL_PCT, musicVolumePct), 0, 500);
         sfxVolumePct = clampInt(p.getInt(PREF_SFX_VOL_PCT, sfxVolumePct), 0, 500);

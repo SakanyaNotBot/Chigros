@@ -74,6 +74,7 @@ public class Note {
     public transient long badTimeMs = 0;
     public transient boolean scored = false;
     public transient double statOffset = 0.0;
+    public transient boolean offsetIndicatorShown = false;
     public transient int frameCount = 0;
     public transient int sortedIndex = -1;
 

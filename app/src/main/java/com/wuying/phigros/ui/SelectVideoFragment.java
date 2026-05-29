@@ -18,6 +18,7 @@ import com.google.android.material.switchmaterial.SwitchMaterial;
 import com.google.android.material.textfield.MaterialAutoCompleteTextView;
 import com.google.android.material.textfield.TextInputEditText;
 import com.wuying.phigros.R;
+import com.wuying.phigros.game.GameRenderer;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -50,8 +51,10 @@ public class SelectVideoFragment extends Fragment {
     private SwitchMaterial swAa;
     private SwitchMaterial swShowFps;
     private SwitchMaterial swShowDebug;
+    private SwitchMaterial swChartReveal;
     private SwitchMaterial swMultiHighlight;
     private SwitchMaterial swApfc;
+    private MaterialAutoCompleteTextView actHitOffsetIndicatorMode;
 
     private MaterialAutoCompleteTextView actSkin;
     private MaterialButton btnSkinImport;
@@ -81,8 +84,10 @@ public class SelectVideoFragment extends Fragment {
         swAa = view.findViewById(R.id.sw_antialias);
         swShowFps = view.findViewById(R.id.sw_show_fps);
         swShowDebug = view.findViewById(R.id.sw_show_debug);
+        swChartReveal = view.findViewById(R.id.sw_chart_reveal);
         swMultiHighlight = view.findViewById(R.id.sw_multi_highlight);
         swApfc = view.findViewById(R.id.sw_apfc);
+        actHitOffsetIndicatorMode = view.findViewById(R.id.act_hit_offset_indicator_mode);
 
         actSkin = view.findViewById(R.id.act_skin);
         btnSkinImport = view.findViewById(R.id.btn_skin_import);
@@ -120,6 +125,18 @@ public class SelectVideoFragment extends Fragment {
                 if (suppress) return;
                 float val = (position >= 0 && position < PRESET_VALUES.length) ? PRESET_VALUES[position] : 0f;
                 applyPresetSelection(getPresetLabel(position), val);
+            });
+        }
+        if (actHitOffsetIndicatorMode != null) {
+            android.widget.ArrayAdapter<String> ad = new android.widget.ArrayAdapter<>(
+                    requireContext(),
+                    android.R.layout.simple_list_item_1,
+                    buildHitOffsetModeLabels()
+            );
+            actHitOffsetIndicatorMode.setAdapter(ad);
+            actHitOffsetIndicatorMode.setOnItemClickListener((parent, v, position, id) -> {
+                if (suppress) return;
+                host().setHitOffsetIndicatorMode(position);
             });
         }
 
@@ -198,6 +215,7 @@ public class SelectVideoFragment extends Fragment {
         if (swAa != null) swAa.setOnCheckedChangeListener((buttonView, isChecked) -> host().setAntialias(isChecked));
         if (swShowFps != null) swShowFps.setOnCheckedChangeListener((buttonView, isChecked) -> host().setShowFps(isChecked));
         if (swShowDebug != null) swShowDebug.setOnCheckedChangeListener((buttonView, isChecked) -> host().setShowDebugInfo(isChecked));
+        if (swChartReveal != null) swChartReveal.setOnCheckedChangeListener((buttonView, isChecked) -> host().setChartReveal(isChecked));
         if (swMultiHighlight != null) swMultiHighlight.setOnCheckedChangeListener((buttonView, isChecked) -> host().setMultiPressHighlight(isChecked));
         if (swApfc != null) swApfc.setOnCheckedChangeListener((buttonView, isChecked) -> host().setApfcIndicator(isChecked));
 
@@ -295,8 +313,13 @@ public class SelectVideoFragment extends Fragment {
         if (swAa != null) swAa.setChecked(a.isAntialias());
         if (swShowFps != null) swShowFps.setChecked(a.isShowFps());
         if (swShowDebug != null) swShowDebug.setChecked(a.isShowDebugInfo());
+        if (swChartReveal != null) swChartReveal.setChecked(a.isChartReveal());
         if (swMultiHighlight != null) swMultiHighlight.setChecked(a.isMultiPressHighlight());
         if (swApfc != null) swApfc.setChecked(a.isApfcIndicator());
+        if (actHitOffsetIndicatorMode != null) {
+            int mode = GameRenderer.sanitizeHitOffsetIndicatorMode(a.getHitOffsetIndicatorMode());
+            actHitOffsetIndicatorMode.setText(getHitOffsetModeLabel(mode), false);
+        }
         suppress = false;
     }
 
@@ -339,6 +362,20 @@ public class SelectVideoFragment extends Fragment {
             labels[i] = PRESET_RATIO_LABELS[i];
         }
         return labels;
+    }
+
+    private String[] buildHitOffsetModeLabels() {
+        return new String[]{
+                getString(R.string.option_hit_offset_disabled),
+                getString(R.string.option_hit_offset_sector),
+                getString(R.string.option_hit_offset_line)
+        };
+    }
+
+    private String getHitOffsetModeLabel(int mode) {
+        String[] labels = buildHitOffsetModeLabels();
+        int index = GameRenderer.sanitizeHitOffsetIndicatorMode(mode);
+        return labels[index];
     }
 
     private String getPresetLabel(int index) {

@@ -406,9 +406,12 @@ public class SelectReplayFragment extends Fragment {
         it.putExtra(PlayActivity.EXTRA_ANTIALIAS, h.isAntialias());
         it.putExtra(PlayActivity.EXTRA_SHOW_FPS, h.isShowFps());
         it.putExtra(PlayActivity.EXTRA_SHOW_DEBUG, h.isShowDebugInfo());
+        it.putExtra(PlayActivity.EXTRA_CHART_REVEAL, h.isChartReveal());
         it.putExtra(PlayActivity.EXTRA_MULTI_HIGHLIGHT, h.isMultiPressHighlight());
         it.putExtra(PlayActivity.EXTRA_APFC, h.isApfcIndicator());
-        it.putExtra(PlayActivity.EXTRA_CHALLENGE, h.isChallengeMode());
+        it.putExtra(PlayActivity.EXTRA_HIT_OFFSET_INDICATOR, h.isHitOffsetIndicator());
+        it.putExtra(PlayActivity.EXTRA_HIT_OFFSET_INDICATOR_MODE, h.getHitOffsetIndicatorMode());
+        it.putExtra(PlayActivity.EXTRA_CHALLENGE, info != null && info.challenge);
 
         // Apply current skin
         int skinIdx = SkinManager.getSelectedSkinIndex(requireContext());

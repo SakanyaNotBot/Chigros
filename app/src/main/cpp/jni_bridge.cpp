@@ -17,6 +17,7 @@ void audioEngine_triggerSfx(int noteType);
 void audioEngine_setPlaybackSpeed(float speed);
 void audioEngine_setSfxVolume(float volume);
 void audioEngine_setMusicVolume(float volume);
+void audioEngine_setMusicLooping(bool looping);
 void audioEngine_start();
 void audioEngine_pause(bool pause);
 void audioEngine_restart();
@@ -132,6 +133,11 @@ Java_com_wuying_phigros_audio_NativeAudioEngine_nativeSetMusicVolume(JNIEnv *, j
 }
 
 extern "C" JNIEXPORT void JNICALL
+Java_com_wuying_phigros_audio_NativeAudioEngine_nativeSetMusicLooping(JNIEnv *, jclass, jboolean looping) {
+    audioEngine_setMusicLooping(looping == JNI_TRUE);
+}
+
+extern "C" JNIEXPORT void JNICALL
 Java_com_wuying_phigros_audio_NativeAudioEngine_nativeStart(JNIEnv *, jclass) {
     audioEngine_start();
 }
@@ -216,6 +222,7 @@ JNI_OnLoad(JavaVM *vm, void *) {
             {"nativeSetPlaybackSpeed", "(F)V", (void *) Java_com_wuying_phigros_audio_NativeAudioEngine_nativeSetPlaybackSpeed},
             {"nativeSetSfxVolume", "(F)V", (void *) Java_com_wuying_phigros_audio_NativeAudioEngine_nativeSetSfxVolume},
             {"nativeSetMusicVolume", "(F)V", (void *) Java_com_wuying_phigros_audio_NativeAudioEngine_nativeSetMusicVolume},
+            {"nativeSetMusicLooping", "(Z)V", (void *) Java_com_wuying_phigros_audio_NativeAudioEngine_nativeSetMusicLooping},
             {"nativeStart", "()V", (void *) Java_com_wuying_phigros_audio_NativeAudioEngine_nativeStart},
             {"nativePause", "(Z)V", (void *) Java_com_wuying_phigros_audio_NativeAudioEngine_nativePause},
             {"nativeRestart", "()V", (void *) Java_com_wuying_phigros_audio_NativeAudioEngine_nativeRestart},

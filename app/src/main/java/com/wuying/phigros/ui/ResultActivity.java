@@ -42,6 +42,7 @@ public class ResultActivity extends AppCompatActivity {
 
     private static final String PHIGROS_FONT_ASSET = "res/phigros.ttf";
     private static final String[] GRADE_FILES = {"F.png", "C.png", "B.png", "A.png", "S.png", "V.png", "FC.png", "AP.png"};
+    private static final float RESULT_BACKGROUND_DIM = 0.4f;
 
     private String replayCachedPath;
 
@@ -102,13 +103,11 @@ public class ResultActivity extends AppCompatActivity {
         String songName = "";
         String difficulty = "";
         String bgPath = null;
-        float backgroundDim = 0.6f;
 
         if (playBundle != null) {
             songName = playBundle.getString(PlayActivity.EXTRA_SONG_NAME, "");
             difficulty = playBundle.getString(PlayActivity.EXTRA_DIFFICULTY, "");
             bgPath = playBundle.getString(PlayActivity.EXTRA_BG_PATH, null);
-            backgroundDim = clampFloat(playBundle.getFloat(PlayActivity.EXTRA_BG_DIM, 0.6f), 0.3f, 0.8f, 0.6f);
         }
 
         if (tvSong != null) tvSong.setText(songName);
@@ -243,7 +242,7 @@ public class ResultActivity extends AppCompatActivity {
         if (tvSong != null) tvSong.setIncludeFontPadding(true);
         if (tvDiff != null) tvDiff.setIncludeFontPadding(true);
 
-        startEnterAnimation(backgroundDim);
+        startEnterAnimation();
     }
 
     private void saveReplay(Bundle playBundle) {
@@ -268,6 +267,7 @@ public class ResultActivity extends AppCompatActivity {
                 if (mp != null) musicFile = new File(mp);
                 if (bp != null) bgFile = new File(bp);
                 settings.chartOffsetMs = playBundle.getInt(PlayActivity.EXTRA_CHART_OFFSET_MS, 0);
+                settings.challenge = playBundle.getBoolean(PlayActivity.EXTRA_CHALLENGE, false);
             }
             String uuid = ReplayManager.savePersistedReplay(this, replayData, chartFile, musicFile, bgFile, settings);
             if (uuid == null) {
@@ -413,11 +413,6 @@ public class ResultActivity extends AppCompatActivity {
 
     private static int clamp(int val, int min, int max) { return val < min ? min : (val > max ? max : val); }
     private static int pack(int r, int g, int b) { return (0xff << 24) | ((r & 0xff) << 16) | ((g & 0xff) << 8) | (b & 0xff); }
-    private static float clampFloat(float val, float min, float max, float fallback) {
-        if (!Float.isFinite(val)) return fallback;
-        return val < min ? min : (val > max ? max : val);
-    }
-
     private void applyBlurToView(View view, float radius) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             try {
@@ -426,7 +421,7 @@ public class ResultActivity extends AppCompatActivity {
         }
     }
 
-    private void startEnterAnimation(float backgroundDim) {
+    private void startEnterAnimation() {
         View contentContainer = findViewById(R.id.content_container);
         View overlay = findViewById(R.id.view_dim_overlay);
         View ivGrade = findViewById(R.id.iv_grade);
@@ -439,73 +434,86 @@ public class ResultActivity extends AppCompatActivity {
 
         if (contentContainer == null) return;
 
-        long duration1_5 = 640;
-        long duration3 = 1280;
+        long contentDuration = 620;
+        long detailDelay = 180;
+        long detailDuration = 420;
+        android.view.animation.Interpolator softOut = new android.view.animation.DecelerateInterpolator(1.8f);
 
         if (overlay != null) {
-            overlay.setAlpha(backgroundDim);
+            overlay.setAlpha(0f);
+            ObjectAnimator overlayFade = ObjectAnimator.ofFloat(overlay, "alpha", 0f, RESULT_BACKGROUND_DIM);
+            overlayFade.setDuration(360);
+            overlayFade.setInterpolator(softOut);
+            overlayFade.start();
         }
 
-        float startY = 1000f;
+        float startY = 160f;
+        contentContainer.setAlpha(0f);
         contentContainer.setTranslationY(startY);
-        contentContainer.setScaleX(0.75f);
-        contentContainer.setScaleY(0.75f);
+        contentContainer.setScaleX(0.96f);
+        contentContainer.setScaleY(0.96f);
 
         ObjectAnimator contentY = ObjectAnimator.ofFloat(contentContainer, "translationY", startY, 0f);
-        contentY.setDuration(duration3);
-        contentY.setInterpolator(new android.view.animation.DecelerateInterpolator(1.5f));
+        contentY.setDuration(contentDuration);
+        contentY.setInterpolator(softOut);
 
-        ObjectAnimator contentScaleX = ObjectAnimator.ofFloat(contentContainer, "scaleX", 0.75f, 1f);
-        contentScaleX.setDuration(duration3);
-        contentScaleX.setInterpolator(new android.view.animation.AccelerateInterpolator(1.5f));
+        ObjectAnimator contentAlpha = ObjectAnimator.ofFloat(contentContainer, "alpha", 0f, 1f);
+        contentAlpha.setDuration(280);
+        contentAlpha.setInterpolator(softOut);
 
-        ObjectAnimator contentScaleY = ObjectAnimator.ofFloat(contentContainer, "scaleY", 0.75f, 1f);
-        contentScaleY.setDuration(duration3);
-        contentScaleY.setInterpolator(new android.view.animation.AccelerateInterpolator(1.5f));
+        ObjectAnimator contentScaleX = ObjectAnimator.ofFloat(contentContainer, "scaleX", 0.96f, 1f);
+        contentScaleX.setDuration(contentDuration);
+        contentScaleX.setInterpolator(softOut);
+
+        ObjectAnimator contentScaleY = ObjectAnimator.ofFloat(contentContainer, "scaleY", 0.96f, 1f);
+        contentScaleY.setDuration(contentDuration);
+        contentScaleY.setInterpolator(softOut);
 
         AnimatorSet contentAnim = new AnimatorSet();
-        contentAnim.playTogether(contentY, contentScaleX, contentScaleY);
+        contentAnim.playTogether(contentAlpha, contentY, contentScaleX, contentScaleY);
         contentAnim.start();
 
         if (ivGrade != null) {
-            ivGrade.setScaleX(2f); ivGrade.setScaleY(2f);
-            ivGrade.setTranslationX(-200f); ivGrade.setTranslationY(-500f);
+            ivGrade.setAlpha(0f);
+            ivGrade.setScaleX(1.18f); ivGrade.setScaleY(1.18f);
+            ivGrade.setTranslationX(-36f); ivGrade.setTranslationY(-72f);
 
-            ObjectAnimator gradeScaleX = ObjectAnimator.ofFloat(ivGrade, "scaleX", 2f, 1f);
-            gradeScaleX.setDuration(duration3);
-            gradeScaleX.setInterpolator(new android.view.animation.AccelerateInterpolator(1.5f));
-            ObjectAnimator gradeScaleY = ObjectAnimator.ofFloat(ivGrade, "scaleY", 2f, 1f);
-            gradeScaleY.setDuration(duration3);
-            gradeScaleY.setInterpolator(new android.view.animation.AccelerateInterpolator(1.5f));
-            ObjectAnimator gradeY1 = ObjectAnimator.ofFloat(ivGrade, "translationY", -500f, -50f);
-            gradeY1.setDuration(duration1_5);
-            gradeY1.setInterpolator(new android.view.animation.DecelerateInterpolator());
-            ObjectAnimator gradeY2 = ObjectAnimator.ofFloat(ivGrade, "translationY", -50f, 0f);
-            gradeY2.setStartDelay(duration1_5);
-            gradeY2.setDuration(duration1_5);
-            gradeY2.setInterpolator(new android.view.animation.AccelerateInterpolator());
-            ObjectAnimator gradeX = ObjectAnimator.ofFloat(ivGrade, "translationX", -200f, 0f);
-            gradeX.setStartDelay(duration1_5);
-            gradeX.setDuration(duration1_5);
-            gradeX.setInterpolator(new android.view.animation.AccelerateInterpolator());
+            ObjectAnimator gradeAlpha = ObjectAnimator.ofFloat(ivGrade, "alpha", 0f, 1f);
+            gradeAlpha.setDuration(260);
+            gradeAlpha.setInterpolator(softOut);
+            ObjectAnimator gradeScaleX = ObjectAnimator.ofFloat(ivGrade, "scaleX", 1.18f, 1f);
+            gradeScaleX.setDuration(contentDuration);
+            gradeScaleX.setInterpolator(softOut);
+            ObjectAnimator gradeScaleY = ObjectAnimator.ofFloat(ivGrade, "scaleY", 1.18f, 1f);
+            gradeScaleY.setDuration(contentDuration);
+            gradeScaleY.setInterpolator(softOut);
+            ObjectAnimator gradeY = ObjectAnimator.ofFloat(ivGrade, "translationY", -72f, 0f);
+            gradeY.setDuration(contentDuration);
+            gradeY.setInterpolator(softOut);
+            ObjectAnimator gradeX = ObjectAnimator.ofFloat(ivGrade, "translationX", -36f, 0f);
+            gradeX.setDuration(contentDuration);
+            gradeX.setInterpolator(softOut);
 
             AnimatorSet gradeAnim = new AnimatorSet();
-            gradeAnim.playTogether(gradeScaleX, gradeScaleY, gradeY1, gradeY2, gradeX);
+            gradeAnim.playTogether(gradeAlpha, gradeScaleX, gradeScaleY, gradeY, gradeX);
             gradeAnim.start();
         }
 
         View[] statsViews = {tvScore, upperBoard, cardIllustration, lowerBoard};
-        for (View view : statsViews) {
+        for (int i = 0; i < statsViews.length; i++) {
+            View view = statsViews[i];
             if (view == null) continue;
-            view.setTranslationY(-200f);
+            long delay = detailDelay + i * 45L;
+            view.setTranslationY(52f);
             view.setAlpha(0f);
             ObjectAnimator alphaAnim = ObjectAnimator.ofFloat(view, "alpha", 0f, 1f);
-            alphaAnim.setStartDelay(duration3);
-            alphaAnim.setDuration(duration1_5);
-            ObjectAnimator slideAnim = ObjectAnimator.ofFloat(view, "translationY", 100f, 0f);
-            slideAnim.setStartDelay(duration3);
-            slideAnim.setDuration(duration1_5);
-            slideAnim.setInterpolator(new android.view.animation.DecelerateInterpolator());
+            alphaAnim.setStartDelay(delay);
+            alphaAnim.setDuration(detailDuration);
+            alphaAnim.setInterpolator(softOut);
+            ObjectAnimator slideAnim = ObjectAnimator.ofFloat(view, "translationY", 52f, 0f);
+            slideAnim.setStartDelay(delay);
+            slideAnim.setDuration(detailDuration);
+            slideAnim.setInterpolator(softOut);
             AnimatorSet statAnim = new AnimatorSet();
             statAnim.playTogether(alphaAnim, slideAnim);
             statAnim.start();
@@ -516,14 +524,16 @@ public class ResultActivity extends AppCompatActivity {
             buttonsContainer.postDelayed(() -> {
                 try {
                     ObjectAnimator alphaAnim = ObjectAnimator.ofFloat(buttonsContainer, "alpha", 0f, 1f);
-                    alphaAnim.setDuration(300);
-                    ObjectAnimator translationY = ObjectAnimator.ofFloat(buttonsContainer, "translationY", 50f, 0f);
-                    translationY.setDuration(300);
+                    alphaAnim.setDuration(260);
+                    alphaAnim.setInterpolator(softOut);
+                    ObjectAnimator translationY = ObjectAnimator.ofFloat(buttonsContainer, "translationY", 32f, 0f);
+                    translationY.setDuration(260);
+                    translationY.setInterpolator(softOut);
                     AnimatorSet animatorSet = new AnimatorSet();
                     animatorSet.playTogether(alphaAnim, translationY);
                     animatorSet.start();
                 } catch (Throwable ignored) {}
-            }, duration3 + 200);
+            }, detailDelay + 260);
         }
 
         if (replayButtonsContainer != null && replayButtonsContainer.getVisibility() == View.VISIBLE) {
@@ -531,14 +541,16 @@ public class ResultActivity extends AppCompatActivity {
             replayButtonsContainer.postDelayed(() -> {
                 try {
                     ObjectAnimator alphaAnim = ObjectAnimator.ofFloat(replayButtonsContainer, "alpha", 0f, 1f);
-                    alphaAnim.setDuration(300);
-                    ObjectAnimator translationY = ObjectAnimator.ofFloat(replayButtonsContainer, "translationY", 50f, 0f);
-                    translationY.setDuration(300);
+                    alphaAnim.setDuration(260);
+                    alphaAnim.setInterpolator(softOut);
+                    ObjectAnimator translationY = ObjectAnimator.ofFloat(replayButtonsContainer, "translationY", 32f, 0f);
+                    translationY.setDuration(260);
+                    translationY.setInterpolator(softOut);
                     AnimatorSet animatorSet = new AnimatorSet();
                     animatorSet.playTogether(alphaAnim, translationY);
                     animatorSet.start();
                 } catch (Throwable ignored) {}
-            }, duration3 + 200);
+            }, detailDelay + 260);
         }
     }
 

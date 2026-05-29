@@ -144,6 +144,8 @@
 -keep class com.wuying.phigros.game.GameRenderer$HitEffect { *; }
 -keep class com.wuying.phigros.game.GameRenderer$BadEffect { *; }
 -keep class com.wuying.phigros.game.GameRenderer$HoldUv { *; }
+-keep class com.wuying.phigros.game.HitOffsetIndicator { *; }
+-keep class com.wuying.phigros.game.HitOffsetIndicator$Mark { *; }
 
 # ---------- GameGLSurfaceView (GLSurfaceView subclass) ----------
 -keep class com.wuying.phigros.game.GameGLSurfaceView extends android.opengl.GLSurfaceView { *; }

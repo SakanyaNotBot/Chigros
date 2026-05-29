@@ -65,6 +65,11 @@ public final class NativeAudioEngine {
         nativeSetMusicVolume(volume);
     }
 
+    public static void setMusicLooping(boolean looping) {
+        if (!sCreated) return;
+        nativeSetMusicLooping(looping);
+    }
+
     public static void prepareDefaultSfxIfMissing() {
         if (!sCreated) return;
         nativePrepareDefaultSfxIfMissing();
@@ -110,6 +115,7 @@ public final class NativeAudioEngine {
     private static native void nativeSetPlaybackSpeed(float speed);
     private static native void nativeSetSfxVolume(float volume);
     private static native void nativeSetMusicVolume(float volume);
+    private static native void nativeSetMusicLooping(boolean looping);
     private static native void nativeStart();
     private static native void nativePause(boolean pause);
     private static native void nativeRestart();

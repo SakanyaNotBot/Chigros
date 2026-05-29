@@ -84,8 +84,11 @@ public class PlayActivity extends AppCompatActivity implements GameRenderer.Call
     public static final String EXTRA_ANTIALIAS = "extra_antialias";
     public static final String EXTRA_SHOW_FPS = "extra_show_fps";
     public static final String EXTRA_SHOW_DEBUG = "extra_show_debug";
+    public static final String EXTRA_CHART_REVEAL = "extra_chart_reveal";
     public static final String EXTRA_MULTI_HIGHLIGHT = "extra_multi_highlight";
     public static final String EXTRA_APFC = "extra_apfc";
+    public static final String EXTRA_HIT_OFFSET_INDICATOR = "extra_hit_offset_indicator";
+    public static final String EXTRA_HIT_OFFSET_INDICATOR_MODE = "extra_hit_offset_indicator_mode";
     public static final String EXTRA_AUTOPLAY = "extra_autoplay";
     public static final String EXTRA_CHALLENGE = "extra_challenge";
     public static final String EXTRA_SKIN_PATH = "extra_skin_path";
@@ -111,8 +114,10 @@ public class PlayActivity extends AppCompatActivity implements GameRenderer.Call
     private boolean antialias = false;
     private boolean showFps = false;
     private boolean showDebugInfo = false;
+    private boolean chartReveal = false;
     private boolean multiPressHighlight = true;
     private boolean apfcIndicator = false;
+    private int hitOffsetIndicatorMode = GameRenderer.HIT_OFFSET_INDICATOR_DISABLED;
     private boolean autoplay = false;
     private boolean challengeMode = false;
 
@@ -176,8 +181,14 @@ public class PlayActivity extends AppCompatActivity implements GameRenderer.Call
         antialias = getIntent().getBooleanExtra(EXTRA_ANTIALIAS, false);
         showFps = getIntent().getBooleanExtra(EXTRA_SHOW_FPS, false);
         showDebugInfo = getIntent().getBooleanExtra(EXTRA_SHOW_DEBUG, false);
+        chartReveal = getIntent().getBooleanExtra(EXTRA_CHART_REVEAL, false);
         multiPressHighlight = getIntent().getBooleanExtra(EXTRA_MULTI_HIGHLIGHT, true);
         apfcIndicator = getIntent().getBooleanExtra(EXTRA_APFC, false);
+        hitOffsetIndicatorMode = GameRenderer.sanitizeHitOffsetIndicatorMode(
+                getIntent().getIntExtra(EXTRA_HIT_OFFSET_INDICATOR_MODE,
+                        getIntent().getBooleanExtra(EXTRA_HIT_OFFSET_INDICATOR, false)
+                                ? GameRenderer.HIT_OFFSET_INDICATOR_SECTOR
+                                : GameRenderer.HIT_OFFSET_INDICATOR_DISABLED));
         autoplay = getIntent().getBooleanExtra(EXTRA_AUTOPLAY, false);
         challengeMode = getIntent().getBooleanExtra(EXTRA_CHALLENGE, false);
         skinPath = getIntent().getStringExtra(EXTRA_SKIN_PATH);
@@ -333,7 +344,9 @@ public class PlayActivity extends AppCompatActivity implements GameRenderer.Call
                             totalTimeSec, aspectRatio, keyScale, scrollSpeed,
                             mirrorX, musicSpeed, userOffsetSec, backgroundDim,
                             lowResMode, antialias, multiPressHighlight, apfcIndicator,
+                            hitOffsetIndicatorMode,
                             false, challengeMode, showFps, showDebugInfo,
+                            chartReveal,
                             skinPath, this);
                     renderer.setReplayPlayback(replayData);
                 } catch (IOException e) {
@@ -354,7 +367,9 @@ public class PlayActivity extends AppCompatActivity implements GameRenderer.Call
                         totalTimeSec, aspectRatio, keyScale, scrollSpeed,
                         mirrorX, musicSpeed, userOffsetSec, backgroundDim,
                         lowResMode, antialias, multiPressHighlight, apfcIndicator,
+                        hitOffsetIndicatorMode,
                         useAutoplay, challengeMode, showFps, showDebugInfo,
+                        chartReveal,
                         skinPath, this);
                 if (replayRecorderData != null) {
                     renderer.setReplayRecorder(replayRecorderData);
@@ -767,8 +782,12 @@ public class PlayActivity extends AppCompatActivity implements GameRenderer.Call
             playBundle.putBoolean(EXTRA_ANTIALIAS, antialias);
             playBundle.putBoolean(EXTRA_SHOW_FPS, showFps);
             playBundle.putBoolean(EXTRA_SHOW_DEBUG, showDebugInfo);
+            playBundle.putBoolean(EXTRA_CHART_REVEAL, chartReveal);
             playBundle.putBoolean(EXTRA_MULTI_HIGHLIGHT, multiPressHighlight);
             playBundle.putBoolean(EXTRA_APFC, apfcIndicator);
+            playBundle.putBoolean(EXTRA_HIT_OFFSET_INDICATOR,
+                    hitOffsetIndicatorMode != GameRenderer.HIT_OFFSET_INDICATOR_DISABLED);
+            playBundle.putInt(EXTRA_HIT_OFFSET_INDICATOR_MODE, hitOffsetIndicatorMode);
             playBundle.putBoolean(EXTRA_AUTOPLAY, autoplay);
             playBundle.putBoolean(EXTRA_CHALLENGE, challengeMode);
             playBundle.putString(EXTRA_SKIN_PATH, skinPath);
@@ -797,6 +816,7 @@ public class PlayActivity extends AppCompatActivity implements GameRenderer.Call
             }
 
             startActivity(it);
+            overridePendingTransition(R.anim.result_enter, R.anim.play_exit_to_result);
             finish();
         });
     }

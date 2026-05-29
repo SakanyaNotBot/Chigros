@@ -269,6 +269,7 @@ public:
         mCbNumFrames.store(0);
         mCbSpeed.store(1.0f);
         mMusicDurationSec.store(0.0);
+        mMusicLooping.store(false);
     }
 
     void setMusicData(const float *pcm, int length, int inRate, int inCh) {
@@ -276,6 +277,7 @@ public:
         if (!pcm || length <= 0 || inRate <= 0) {
             mMusic.clear();
             mMusicDurationSec.store(0.0);
+            mMusicLooping.store(false);
             return;
         }
         int inFrames = length / (inCh > 0 ? inCh : 1);
@@ -290,6 +292,7 @@ public:
 
         // Reset playhead (make it visible immediately to renderer)
         mPlayheadFrames.store(0, std::memory_order_release);
+        mMusicLooping.store(false, std::memory_order_release);
         mRestartRequested.store(true);
 
         ALOGI("Music loaded: inRate=%d inCh=%d inFrames=%d => outFrames=%lld dur=%.3f", inRate, inCh,
@@ -356,6 +359,10 @@ public:
         if (volume < 0.0f) volume = 0.0f;
         if (volume > 5.0f) volume = 5.0f;
         mMusicVolume.store(volume, std::memory_order_release);
+    }
+
+    void setMusicLooping(bool looping) {
+        mMusicLooping.store(looping, std::memory_order_release);
     }
 
     void start() {
@@ -580,11 +587,17 @@ public:
             float r = 0.0f;
 
             // Music (linear interpolation when speed is fractional)
-            if (musicFrames > 0 && pos >= 0.0 && pos < (double) musicFrames) {
-                int64_t i0 = (int64_t) pos;
-                double frac = pos - (double) i0;
+            const bool looping = mMusicLooping.load(std::memory_order_relaxed);
+            if (musicFrames > 0 && pos >= 0.0 && (looping || pos < (double) musicFrames)) {
+                double samplePos = pos;
+                if (looping) {
+                    samplePos = std::fmod(samplePos, (double) musicFrames);
+                    if (samplePos < 0.0) samplePos += (double) musicFrames;
+                }
+                int64_t i0 = (int64_t) samplePos;
+                double frac = samplePos - (double) i0;
                 int64_t i1 = i0 + 1;
-                if (i1 >= musicFrames) i1 = i0;
+                if (i1 >= musicFrames) i1 = looping ? 0 : i0;
 
                 int64_t idx0 = i0 * kOutputChannels;
                 int64_t idx1 = i1 * kOutputChannels;
@@ -749,6 +762,7 @@ private:
     std::atomic<float> mPlaybackSpeed{1.0f};
     std::atomic<float> mSfxVolume{1.0f};
     std::atomic<float> mMusicVolume{1.0f};
+    std::atomic<bool> mMusicLooping{false};
 
     std::atomic<bool> mPaused{true};
     std::atomic<bool> mPlaying{false};
@@ -809,6 +823,11 @@ void audioEngine_setSfxVolume(float volume) {
 void audioEngine_setMusicVolume(float volume) {
     if (!gEngine) return;
     gEngine->setMusicVolume(volume);
+}
+
+void audioEngine_setMusicLooping(bool looping) {
+    if (!gEngine) return;
+    gEngine->setMusicLooping(looping);
 }
 
 void audioEngine_start() {

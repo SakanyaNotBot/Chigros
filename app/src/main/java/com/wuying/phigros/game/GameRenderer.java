@@ -11,7 +11,6 @@ import android.graphics.Typeface;
 import android.opengl.GLES20;
 import android.opengl.GLSurfaceView;
 import android.opengl.Matrix;
-import android.os.SystemClock;
 import android.view.MotionEvent;
 
 import android.util.Log;
@@ -35,6 +34,7 @@ import java.nio.ByteOrder;
 import java.nio.FloatBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -49,6 +49,9 @@ import javax.microedition.khronos.opengles.GL10;
 public class GameRenderer implements GLSurfaceView.Renderer {
 
     private static final String TAG = "GameRenderer";
+    public static final int HIT_OFFSET_INDICATOR_DISABLED = 0;
+    public static final int HIT_OFFSET_INDICATOR_SECTOR = 1;
+    public static final int HIT_OFFSET_INDICATOR_LINE = 2;
 
     private static final ObjectMapper JSON_MAPPER = new ObjectMapper()
             .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
@@ -82,9 +85,19 @@ public class GameRenderer implements GLSurfaceView.Renderer {
     }
 
     public void setReplayPlayback(ReplayData data) {
+        sortReplayEntriesByTime(data);
         this.replayPlaybackData = data;
         this.replayPlayback = (data != null);
         this.replayEntryIndex = 0;
+    }
+
+    private static void sortReplayEntriesByTime(@Nullable ReplayData data) {
+        if (data == null || data.entries == null) return;
+        Collections.sort(data.entries, (a, b) -> {
+            double at = a != null ? a.ts : Double.POSITIVE_INFINITY;
+            double bt = b != null ? b.ts : Double.POSITIVE_INFINITY;
+            return Double.compare(at, bt);
+        });
     }
 
     public boolean isReplayPlayback() {
@@ -174,6 +187,10 @@ public class GameRenderer implements GLSurfaceView.Renderer {
         float elapsedSec = elapsedOutroSeconds();
         return elapsedSec >= OUTRO_LINE_COLLAPSE_START_SEC
                 && elapsedSec < OUTRO_LINE_COLLAPSE_START_SEC + OUTRO_LINE_COLLAPSE_DUR_SEC;
+    }
+
+    private boolean shouldHideNonLineStageElementsForOutroCollapse() {
+        return isInOutroLineCollapse();
     }
 
     private float computeOutroLineCollapseScale() {
@@ -341,10 +358,13 @@ public class GameRenderer implements GLSurfaceView.Renderer {
     private final boolean antialias;
     private final boolean multiPressHighlight;
     private final boolean apfcIndicator;
+    private final int hitOffsetIndicatorMode;
+    private final boolean hitOffsetIndicatorEnabled;
     private final boolean autoplay;
     private final boolean challengeMode;
     private final boolean showFps;
     private final boolean showDebugInfo;
+    private final boolean chartReveal;
 
     @Nullable
     private final String skinPath;
@@ -363,6 +383,22 @@ public class GameRenderer implements GLSurfaceView.Renderer {
     private volatile boolean skinHoldCompact = false;
     private volatile boolean skinHoldKeepHead = false;
     private volatile boolean skinHoldRepeat = false;
+
+    private final HitOffsetIndicator hitOffsetIndicator = new HitOffsetIndicator(64);
+    private Texture hitOffsetTextTexture;
+    private String hitOffsetTextTextureValue;
+    private static final float HIT_OFFSET_GREEN_R = 0.42f;
+    private static final float HIT_OFFSET_GREEN_G = 1.00f;
+    private static final float HIT_OFFSET_GREEN_B = 0.36f;
+    private static final float HIT_OFFSET_YELLOW_R = 1.00f;
+    private static final float HIT_OFFSET_YELLOW_G = 0.86f;
+    private static final float HIT_OFFSET_YELLOW_B = 0.28f;
+    private static final float HIT_OFFSET_RED_R = 1.00f;
+    private static final float HIT_OFFSET_RED_G = 0.36f;
+    private static final float HIT_OFFSET_RED_B = 0.31f;
+    private static final float[] HIT_OFFSET_GREEN = {HIT_OFFSET_GREEN_R, HIT_OFFSET_GREEN_G, HIT_OFFSET_GREEN_B};
+    private static final float[] HIT_OFFSET_YELLOW = {HIT_OFFSET_YELLOW_R, HIT_OFFSET_YELLOW_G, HIT_OFFSET_YELLOW_B};
+    private static final float[] HIT_OFFSET_RED = {HIT_OFFSET_RED_R, HIT_OFFSET_RED_G, HIT_OFFSET_RED_B};
 
     // Official scene split:
     // - GameCanvas/Began.anim expands the fake judge line over 55 frames and
@@ -539,6 +575,7 @@ public class GameRenderer implements GLSurfaceView.Renderer {
     private Texture texHoldBodyMh; // hold_body_mh.png
     private Texture texHitFx;  // hit_fx.png (atlas)
     private Texture texWhite;  // 1x1 white
+    private Texture texHitOffsetArrow;
 
     // Storyboard textures (RePhiEdit)
     private final Map<String, Texture> fileTextureCache = new HashMap<>();
@@ -610,6 +647,7 @@ public class GameRenderer implements GLSurfaceView.Renderer {
     private final float[] tmpSavedProj = new float[16];
     private final float[] tmpUv = new float[8];
     private final float[] tmpVisibleRange = new float[2];
+    private final float[] tmpRevealWorldBounds = new float[4];
     private final ArrayList<Texture> noteHeadTextureDrawList = new ArrayList<>();
     private final HoldUv[] holdUvCache = new HoldUv[2];
     private final float[][] noteWidthScale = new float[5][2];
@@ -632,6 +670,7 @@ public class GameRenderer implements GLSurfaceView.Renderer {
 
     // UI rects (screen space)
     private final RectF pauseRect = new RectF();
+    private final RectF pauseHitRect = new RectF();
     private float pauseHitPadPx = 0f;
     private static final float PAUSE_TOUCH_FADE_IN_SEC = 0.25f;
     private static final float PAUSE_TOUCH_VISIBLE_SEC = 1.0f;
@@ -662,11 +701,6 @@ public class GameRenderer implements GLSurfaceView.Renderer {
     private boolean replayRecording = false;
     private ReplayData replayRecorderData;
     private final Set<Integer> recordedHoldPressNotes = new HashSet<>();
-    // Earliest touch-down chart time this frame, mapped from MotionEvent.getEventTime()
-    // onto the same smoothed chart-time axis used by rendering and judgment.
-    private volatile double firstTouchChartTimeSec = Double.NaN;
-    private double replayClockRefChartTimeSec = Double.NaN;
-    private long replayClockRefUptimeMs = -1L;
 
     // Replay playback
     private boolean replayPlayback = false;
@@ -746,9 +780,17 @@ public class GameRenderer implements GLSurfaceView.Renderer {
     private static final double HOLD_PARTICLE_INTERVAL_BEATS = 0.5;
     private static final double HOLD_TAIL_EARLY_SETTLE = 0.220;
     private static final double HOLD_DESTROY_DELAY = 0.250;
+    private static final float CHART_REVEAL_ALPHA = 0.35f;
+    private static final float CHART_REVEAL_ASPECT = 16f / 9f;
+    private static final float CHART_REVEAL_TARGET_SCALE = 0.45f;
+    private static final float CHART_REVEAL_TRANSITION_SEC = 1.0f;
 
     private double frameChartTimeSec = 0.0;
     private double framePlayTimeSec = 0.0;
+    private float frameChartRevealScale = 1f;
+    private boolean frameChartRevealCameraActive = false;
+    private boolean frameChartRevealHiddenObjectsVisible = false;
+    private boolean frameChartRevealPreOutroWindow = false;
 
     private final Map<Integer, TouchState> activeTouches = new HashMap<>();
     private final Set<Integer> startedTouchIds = new HashSet<>();
@@ -804,10 +846,12 @@ public class GameRenderer implements GLSurfaceView.Renderer {
                         boolean antialias,
                         boolean multiPressHighlight,
                         boolean apfcIndicator,
+                        int hitOffsetIndicatorMode,
                         boolean autoplay,
                         boolean challengeMode,
                         boolean showFps,
                         boolean showDebugInfo,
+                        boolean chartReveal,
                         @Nullable String skinPath,
                         @Nullable Callback callback) {
         this.context = context.getApplicationContext();
@@ -828,10 +872,13 @@ public class GameRenderer implements GLSurfaceView.Renderer {
         this.antialias = antialias;
         this.multiPressHighlight = multiPressHighlight;
         this.apfcIndicator = apfcIndicator;
+        this.hitOffsetIndicatorMode = sanitizeHitOffsetIndicatorMode(hitOffsetIndicatorMode);
+        this.hitOffsetIndicatorEnabled = this.hitOffsetIndicatorMode != HIT_OFFSET_INDICATOR_DISABLED;
         this.autoplay = autoplay;
         this.challengeMode = challengeMode;
         this.showFps = showFps;
         this.showDebugInfo = showDebugInfo;
+        this.chartReveal = chartReveal;
         this.skinPath = skinPath;
         this.callback = callback;
 
@@ -881,6 +928,13 @@ public class GameRenderer implements GLSurfaceView.Renderer {
         // Preload GIF textures on the calling thread (already a background thread
         // in PlayActivity) so the first render frame doesn't stutter on decode.
         preloadGifTextures();
+    }
+
+    public static int sanitizeHitOffsetIndicatorMode(int mode) {
+        if (mode < HIT_OFFSET_INDICATOR_DISABLED || mode > HIT_OFFSET_INDICATOR_LINE) {
+            return HIT_OFFSET_INDICATOR_DISABLED;
+        }
+        return mode;
     }
 
     private void preloadGifTextures() {
@@ -1033,9 +1087,25 @@ public class GameRenderer implements GLSurfaceView.Renderer {
     }
 
     private boolean isInPauseHitArea(float x, float y) {
-        float pad = pauseHitPadPx;
-        return x >= pauseRect.left - pad && x <= pauseRect.right + pad
-                && y >= pauseRect.top - pad && y <= pauseRect.bottom + pad;
+        computeRevealTransformedRect(pauseRect, pauseHitRect);
+        float pad = pauseHitPadPx * currentChartRevealScale();
+        return x >= pauseHitRect.left - pad && x <= pauseHitRect.right + pad
+                && y >= pauseHitRect.top - pad && y <= pauseHitRect.bottom + pad;
+    }
+
+    private void computeRevealTransformedRect(@NonNull RectF src, @NonNull RectF out) {
+        if (!isChartRevealCameraActive()) {
+            out.set(src.left, src.top, src.right, src.bottom);
+            return;
+        }
+        float scale = currentChartRevealScale();
+        float cx = chartRevealCenterX();
+        float cy = chartRevealCenterY();
+        out.set(
+                cx + (src.left - cx) * scale,
+                cy + (src.top - cy) * scale,
+                cx + (src.right - cx) * scale,
+                cy + (src.bottom - cy) * scale);
     }
 
     private void triggerPauseTouchFeedback() {
@@ -1097,12 +1167,6 @@ public class GameRenderer implements GLSurfaceView.Renderer {
             // so fingers placed during pause don't trigger tap judgments on resume.
             if (!wasPaused) {
                 startedTouchIds.add(id);
-                if (replayRecording) {
-                    double ct = eventChartTimeSec(e.getEventTime());
-                    if (!Double.isFinite(firstTouchChartTimeSec) || ct < firstTouchChartTimeSec) {
-                        firstTouchChartTimeSec = ct;
-                    }
-                }
             }
             flickTrackers.put(id, new FlickTracker(e.getX(idx), e.getY(idx)));
             return;
@@ -1246,6 +1310,7 @@ public class GameRenderer implements GLSurfaceView.Renderer {
             n.scored = false;
             n.badTimeMs = 0;
             n.statOffset = 0.0;
+            n.offsetIndicatorShown = false;
             n.frameCount = 0;
         }
         autoNoteIndex = 0;
@@ -1280,6 +1345,7 @@ public class GameRenderer implements GLSurfaceView.Renderer {
         resumeCountdownStartNs = -1L;
         resumeFadeOutStartNs = -1L;
         pauseTouchStartNs = -1L;
+        hitOffsetIndicator.reset();
 
         isInOutro = false;
         outroStartTimeSec = -1f;
@@ -1298,6 +1364,10 @@ public class GameRenderer implements GLSurfaceView.Renderer {
         frameGlobalAlpha = 0f;
         wasInIntro = true;
         frameIntroLinearT = 0f;
+        frameChartRevealScale = 1f;
+        frameChartRevealCameraActive = false;
+        frameChartRevealHiddenObjectsVisible = false;
+        frameChartRevealPreOutroWindow = false;
 
         smoothClockInit = false;
         smoothLastFrameNs = 0L;
@@ -1310,9 +1380,6 @@ public class GameRenderer implements GLSurfaceView.Renderer {
         // Reset replay state
         replayEntryIndex = 0;
         recordedHoldPressNotes.clear();
-        firstTouchChartTimeSec = Double.NaN;
-        replayClockRefChartTimeSec = Double.NaN;
-        replayClockRefUptimeMs = -1L;
         if (replayRecording && replayRecorderData != null) {
             replayRecorderData.entries.clear();
             recordedHoldPressNotes.clear();
@@ -1595,10 +1662,9 @@ public class GameRenderer implements GLSurfaceView.Renderer {
 
     private void commitJudgement(@NonNull Note n, int jr, double diffSec) {
         if (n.judgeResult >= 0) return;
-        // Replay playback: use the exact recorded entry time so effects are placed
-        // at the original timing regardless of the playback device's frame rate.
-        // diffSec = re.ts - n.sect, so n.sect + diffSec = re.ts.
-        double effectTimeSec = replayPlayback ? (n.sect + diffSec) : frameChartTimeSec;
+        // Replay playback restores the same internal offset convention as manual
+        // judgment: diffSec = note time - hit event time.
+        double effectTimeSec = replayPlayback ? chartTimeForJudgementDiff(n, diffSec) : frameChartTimeSec;
         n.judgeResult = jr;
         n.judgeDiffSec = diffSec;
         n.judgeTimeSec = effectTimeSec;
@@ -1618,7 +1684,7 @@ public class GameRenderer implements GLSurfaceView.Renderer {
         } else if (jr == JR_GOOD) {
             judgeCounts[1]++;
             combo++;
-            if (diffSec < 0.0) goodEarly++;
+            if (diffSec > 0.0) goodEarly++;
             else goodLate++;
             apStill = false;
         } else if (jr == JR_BAD) {
@@ -1643,6 +1709,8 @@ public class GameRenderer implements GLSurfaceView.Renderer {
         }
 
         if (combo > maxCombo) maxCombo = combo;
+
+        recordHitOffsetIndicator(n, jr, diffSec, false);
 
         // Spawn effects based on judgment type
         if (jr == JR_PERFECT || jr == JR_GOOD) {
@@ -1690,18 +1758,36 @@ public class GameRenderer implements GLSurfaceView.Renderer {
                 re.t = entryType;
                 re.ni = noteIdx;
                 re.j = jr;
-                // Use the earliest touch-down time from this frame if available;
-                // it was recorded right in onTouchEvent at the physical touch moment.
-                // Falls back to the real-time audio position for HOLD_RELEASE
-                // (which has no associated touch-down) or when no touch was recorded.
-                if (entryType == ReplayData.TYPE_HOLD_RELEASE
-                        || !Double.isFinite(firstTouchChartTimeSec)) {
+                if (entryType == ReplayData.TYPE_HOLD_RELEASE || jr == JR_MISS) {
                     re.ts = replayRecordNowChartTimeSec();
                 } else {
-                    re.ts = firstTouchChartTimeSec;
+                    re.ts = chartTimeForJudgementDiff(n, diffSec);
                 }
                 replayRecorderData.entries.add(re);
             }
+        }
+    }
+
+    private double chartTimeForJudgementDiff(@NonNull Note n, double diffSec) {
+        double chartTimeSec = n.sect - diffSec;
+        return Double.isFinite(chartTimeSec) ? chartTimeSec : replayRecordNowChartTimeSec();
+    }
+
+    private void recordHitOffsetIndicator(@NonNull Note n, int jr, double diffSec, boolean forceHoldHead) {
+        if (!hitOffsetIndicatorEnabled) return;
+        if (autoplay && !replayPlayback) return;
+        if (jr == JR_MISS) return;
+        if (!forceHoldHead
+                && !HitOffsetIndicator.shouldShowCommitMark(n.type, n.offsetIndicatorShown, jr)) {
+            return;
+        }
+        if (forceHoldHead && n.offsetIndicatorShown) return;
+
+        double badWindow = getBadWindowSec();
+        double displayDiffSec = -diffSec;
+        hitOffsetIndicator.addHit(displayDiffSec, jr, visualTimeSec, badWindow);
+        if (n.type == GameConstants.NOTE_HOLD || forceHoldHead) {
+            n.offsetIndicatorShown = true;
         }
     }
 
@@ -1832,6 +1918,7 @@ public class GameRenderer implements GLSurfaceView.Renderer {
         texRestart = loadTextureFromAssetsSafe("res/restart.png", true);
         texContinue = loadTextureFromAssetsSafe("res/continue.png", true);
         texTimerLine = loadTextureFromAssetsSafe("res/timerLine.png");
+        texHitOffsetArrow = loadTextureFromAssetsSafe("res/arrow.png");
 
         noteHeadTex[GameConstants.NOTE_TAP][0] = loadSkinTexture("click.png", "res/click.png");
         noteHeadTex[GameConstants.NOTE_TAP][1] = loadSkinTexture("click_mh.png", "res/click_mh.png");
@@ -1944,12 +2031,13 @@ public class GameRenderer implements GLSurfaceView.Renderer {
         // - targetAspectRatio <= 0 : follow screen (no letterboxing)
         // - targetAspectRatio  > 0 : keep fixed aspect ratio and letterbox as needed (centered)
 
+        float effectiveAspectRatio = chartReveal ? CHART_REVEAL_ASPECT : targetAspectRatio;
         if (viewW <= 0 || viewH <= 0) {
             stageL = 0f;
             stageT = 0f;
             stageW = Math.max(1f, (float) viewW);
             stageH = Math.max(1f, (float) viewH);
-        } else if (targetAspectRatio <= 0f) {
+        } else if (effectiveAspectRatio <= 0f) {
             stageL = 0f;
             stageT = 0f;
             stageW = (float) viewW;
@@ -1958,12 +2046,12 @@ public class GameRenderer implements GLSurfaceView.Renderer {
             float viewAr = (float) viewW / (float) viewH;
 
             // Base aspect ratio: user/chart target, falling back to the current viewport ratio.
-            float ar = targetAspectRatio;
+            float ar = effectiveAspectRatio;
             if (ar <= 0f) ar = viewAr;
 
             // Match prpr behavior (when fix_aspect_ratio is false):
             // never force a stage wider than the current viewport.
-            ar = Math.min(ar, viewAr);
+            if (!chartReveal) ar = Math.min(ar, viewAr);
 
             if (viewAr >= ar) {
                 // Screen is wider than the target ratio: letterbox left/right.
@@ -2014,10 +2102,89 @@ public class GameRenderer implements GLSurfaceView.Renderer {
             Matrix.translateM(stagePreTransform, 0, -cx, 0f, 0f);
             stagePreTransformActive = true;
         }
-
         if (notifyActivity && callback != null) {
             callback.onStageRectChanged(stageL, stageT, stageW, stageH);
         }
+    }
+
+    private float chartRevealCenterX() {
+        return stageL + stageW * 0.5f;
+    }
+
+    private float chartRevealCenterY() {
+        return stageT + stageH * 0.5f;
+    }
+
+    private void updateFrameChartRevealState(double musicPosSec, boolean inIntro) {
+        frameChartRevealScale = 1f;
+        frameChartRevealCameraActive = false;
+        frameChartRevealHiddenObjectsVisible = false;
+        frameChartRevealPreOutroWindow = false;
+        if (!chartReveal || inIntro || isInOutro || !isMusicStartedFlag) {
+            return;
+        }
+
+        float target = CHART_REVEAL_TARGET_SCALE;
+        float transition = Math.max(0.001f, CHART_REVEAL_TRANSITION_SEC);
+        boolean preOutro = totalTimeSec > 0.0
+                && musicPosSec >= Math.max(0.0, totalTimeSec - transition);
+        frameChartRevealCameraActive = true;
+        frameChartRevealPreOutroWindow = preOutro;
+        frameChartRevealHiddenObjectsVisible = !preOutro;
+
+        if (preOutro) {
+            double startSec = Math.max(0.0, totalTimeSec - transition);
+            float p = (float) ((musicPosSec - startSec) / transition);
+            float s = smoothStep01(p);
+            frameChartRevealScale = target + (1f - target) * s;
+        } else {
+            float p = (float) (musicPosSec / transition);
+            float s = smoothStep01(p);
+            frameChartRevealScale = 1f + (target - 1f) * s;
+        }
+        frameChartRevealScale = MathUtils.clamp(frameChartRevealScale, target, 1f);
+    }
+
+    private boolean isChartRevealCameraActive() {
+        return chartReveal && frameChartRevealCameraActive;
+    }
+
+    private boolean shouldRevealHiddenChartObjects() {
+        return chartReveal && frameChartRevealHiddenObjectsVisible;
+    }
+
+    private float currentChartRevealScale() {
+        if (!isChartRevealCameraActive()) return 1f;
+        return MathUtils.clamp(frameChartRevealScale, CHART_REVEAL_TARGET_SCALE, 1f);
+    }
+
+    private float chartRevealScreenX(float x) {
+        if (!isChartRevealCameraActive()) return x;
+        float cx = chartRevealCenterX();
+        return cx + (x - cx) * currentChartRevealScale();
+    }
+
+    private float chartRevealScreenY(float y) {
+        if (!isChartRevealCameraActive()) return y;
+        float cy = chartRevealCenterY();
+        return cy + (y - cy) * currentChartRevealScale();
+    }
+
+    private void computeRevealWorldBounds(@NonNull float[] out) {
+        if (!isChartRevealCameraActive()) {
+            out[0] = stageL;
+            out[1] = stageT;
+            out[2] = stageL + stageW;
+            out[3] = stageT + stageH;
+            return;
+        }
+        float scale = currentChartRevealScale();
+        float cx = chartRevealCenterX();
+        float cy = chartRevealCenterY();
+        out[0] = cx + (0f - cx) / scale;
+        out[1] = cy + (0f - cy) / scale;
+        out[2] = cx + ((float) viewW - cx) / scale;
+        out[3] = cy + ((float) viewH - cy) / scale;
     }
 
 
@@ -2387,9 +2554,13 @@ public class GameRenderer implements GLSurfaceView.Renderer {
         // FBO feedback loop when fullInput shares the composite target's texture attachment.
         Texture afterStage = fullInput;
         if (!tmpActiveNonGlobal.isEmpty()) {
+            float effectL = isChartRevealCameraActive() ? 0f : stageL;
+            float effectT = isChartRevealCameraActive() ? 0f : stageT;
+            float effectW = isChartRevealCameraActive() ? (float) viewW : stageW;
+            float effectH = isChartRevealCameraActive() ? (float) viewH : stageH;
             afterStage = applyPrprEffectChainStageViewport(tmpActiveNonGlobal, fullInput,
                     prprFullA, prprFullB, viewW, viewH, chartTimeSec,
-                    stageL, stageT, stageW, stageH);
+                    effectL, effectT, effectW, effectH);
         }
 
         // 3) Global effects full-screen (these should affect HUD too).
@@ -2442,21 +2613,55 @@ public class GameRenderer implements GLSurfaceView.Renderer {
     private void drawBackgroundAndBarsOnly() {
         drawOfficialSideBackgrounds(1f);
         drawStageBackgroundOnly(computeStageTextureAlpha());
+        if (isChartRevealCameraActive()) {
+            drawRevealScaledMasks(currentChartRevealScale());
+        }
     }
 
     private void drawStageBackgroundOnly(float alpha) {
+        float drawL = stageL;
+        float drawT = stageT;
+        float drawW = stageW;
+        float drawH = stageH;
         if (alpha <= 0.001f) {
-            drawSolidRect(stageL, stageT, stageW, stageH, 0f, 0f, 0f, 1f);
+            drawSolidRect(drawL, drawT, drawW, drawH, 0f, 0f, 0f, 1f);
             return;
         }
         Texture tex = texBackgroundBlur != null ? texBackgroundBlur : texBackground;
         boolean isFbo = texBackgroundBlur != null;
         if (tex != null) {
-            drawOfficialBackgroundClip(tex, isFbo, stageL, stageT, stageW, stageH, alpha);
+            drawOfficialBackgroundClip(tex, isFbo, drawL, drawT, drawW, drawH, alpha);
         } else {
-            drawSolidRect(stageL, stageT, stageW, stageH, 0f, 0f, 0f, alpha);
+            drawSolidRect(drawL, drawT, drawW, drawH, 0f, 0f, 0f, alpha);
         }
-        drawSolidRect(stageL, stageT, stageW, stageH, 0f, 0f, 0f, computeBackgroundDimAlpha());
+        drawSolidRect(drawL, drawT, drawW, drawH, 0f, 0f, 0f, computeBackgroundDimAlpha());
+    }
+
+    private void drawRevealScaledMasks(float scale) {
+        if (!chartReveal || scale >= 0.999f) return;
+        float cx = chartRevealCenterX();
+        float cy = chartRevealCenterY();
+        float maskW = stageW * scale;
+        float maskH = stageH * scale;
+        float stageR = stageL + stageW;
+        float stageB = stageT + stageH;
+        float l = MathUtils.clamp(cx - maskW * 0.5f, stageL, stageR);
+        float t = MathUtils.clamp(cy - maskH * 0.5f, stageT, stageB);
+        float r = MathUtils.clamp(cx + maskW * 0.5f, stageL, stageR);
+        float b = MathUtils.clamp(cy + maskH * 0.5f, stageT, stageB);
+        float baseDim = computeBackgroundDimAlpha();
+        float targetDim = computeSideDimAlpha();
+        float alpha = 0f;
+        if (targetDim > baseDim + 0.001f && baseDim < 0.999f) {
+            alpha = (targetDim - baseDim) / (1f - baseDim);
+        }
+        alpha = MathUtils.clamp(alpha, 0f, 1f);
+        if (alpha <= 0.001f) return;
+
+        drawSolidRect(stageL, stageT, stageW, Math.max(0f, t - stageT), 0f, 0f, 0f, alpha);
+        drawSolidRect(stageL, b, stageW, Math.max(0f, stageB - b), 0f, 0f, 0f, alpha);
+        drawSolidRect(stageL, t, Math.max(0f, l - stageL), Math.max(0f, b - t), 0f, 0f, 0f, alpha);
+        drawSolidRect(r, t, Math.max(0f, stageR - r), Math.max(0f, b - t), 0f, 0f, 0f, alpha);
     }
 
     private Texture applyPrprEffectChain(@NonNull List<PrprEffect> effects,
@@ -2875,8 +3080,6 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
     // ---------------- Rendering core ----------------
 
     private void renderSceneDirect() {
-        boolean needBars = !isStageFullscreen();
-
         // Deferred intro initialization for restart: beginIntro() must run on
         // the GL thread so that introStartNs is a valid wall-clock reference.
         if (restartIntroNeedsInit) {
@@ -2901,17 +3104,9 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
             }
         }
         final double musicPos = getSmoothedPlayheadSeconds();
+        framePlayTimeSec = musicPos;
         frameIntroLineScale = computeIntroLineScale();
         updateOutroState(musicPos);
-
-        if (needBars) {
-            drawOfficialSideBackgrounds(1f);
-            enableStageScissor();
-        }
-        drawStageBackgroundOnly(computeStageTextureAlpha());
-
-        inStageSpace = true;
-        batchFlipUv = mirrorX;
 
         // 200ms hold after intro animation completes.
         // During this hold, the fake line stays at full width while real lines
@@ -2953,6 +3148,33 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
         }
         wasInIntro = inIntro;
 
+        updateFrameChartRevealState(musicPos, inIntro);
+        boolean revealCameraActive = isChartRevealCameraActive();
+        boolean needBars = !revealCameraActive && !isStageFullscreen();
+
+        if (needBars || revealCameraActive) {
+            drawOfficialSideBackgrounds(1f);
+        }
+        if (needBars) {
+            enableStageScissor();
+        }
+        drawStageBackgroundOnly(computeStageTextureAlpha());
+        if (revealCameraActive) {
+            drawRevealScaledMasks(currentChartRevealScale());
+        }
+
+        inStageSpace = true;
+        batchFlipUv = mirrorX;
+        if (revealCameraActive) {
+            float cx = stageL + stageW * 0.5f;
+            float cy = stageT + stageH * 0.5f;
+            float revealScale = currentChartRevealScale();
+            Matrix.translateM(stagePreTransform, 0, cx, cy, 0f);
+            Matrix.scaleM(stagePreTransform, 0, revealScale, revealScale, 1f);
+            Matrix.translateM(stagePreTransform, 0, -cx, -cy, 0f);
+            stagePreTransformActive = true;
+        }
+
         double t;
         if (blockGameplayForTransition) {
             // during enter/hold/exit, chart time is clamped to 0
@@ -2969,10 +3191,15 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
         final float stageAspect = (stageH > 1e-6f) ? (stageW / stageH) : (16f / 9f);
         final boolean isOfficialFormat = chart != null && chart.formatVersion > 0;
 
-        final float noteCullL = stageL - stageW / 12f;
-        final float noteCullT = stageT - stageH / 12f;
-        final float noteCullR = stageL + stageW * 13f / 12f;
-        final float noteCullB = stageT + stageH * 13f / 12f;
+        computeRevealWorldBounds(tmpRevealWorldBounds);
+        final float revealCullScale = revealCameraActive ? currentChartRevealScale() : 1f;
+        final boolean revealHiddenObjects = shouldRevealHiddenChartObjects();
+        final float cullMarginW = revealCameraActive ? stageW / revealCullScale / 12f : stageW / 12f;
+        final float cullMarginH = revealCameraActive ? stageH / revealCullScale / 12f : stageH / 12f;
+        final float noteCullL = tmpRevealWorldBounds[0] - cullMarginW;
+        final float noteCullT = tmpRevealWorldBounds[1] - cullMarginH;
+        final float noteCullR = tmpRevealWorldBounds[2] + cullMarginW;
+        final float noteCullB = tmpRevealWorldBounds[3] + cullMarginH;
 
         if (lines != null) {
             for (int i = 0; i < lines.size(); i++) {
@@ -3010,8 +3237,12 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
                 float cosLine = (float) Math.cos(rad);
                 float sinLine = (float) Math.sin(rad);
 
-                if (!st.hideLine) {
-                    drawJudgeLineVisual(line, st, lineX, lineY, lineRot, cosLine, sinLine, lineAlpha, 1f);
+                if (!st.hideLine || revealHiddenObjects) {
+                    float drawLineAlpha = lineAlpha;
+                    if (revealHiddenObjects && (st.hideLine || drawLineAlpha <= 0f || lineAlphaRaw < 0f)) {
+                        drawLineAlpha = Math.max(drawLineAlpha, CHART_REVEAL_ALPHA);
+                    }
+                    drawJudgeLineVisual(line, st, lineX, lineY, lineRot, cosLine, sinLine, drawLineAlpha, 1f);
                 }
             }
         }
@@ -3027,7 +3258,7 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
                     JudgeLine line = lines.get(lineDrawOrder[oi]);
                     if (line == null || line.attachUiElementId != 0) continue;
                     JudgeLine.StateHolder st = line.lastState;
-                    if (st == null || line.notes == null || st.hideNotes) continue;
+                    if (st == null || line.notes == null || (st.hideNotes && !revealHiddenObjects)) continue;
 
                     float lineRot = st.rotateDeg;
                     float lineX = stageL + st.xNorm * stageW;
@@ -3044,7 +3275,7 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
                     computeLineVisibleRange(st, tmpVisibleRange);
                     float visibleMin = tmpVisibleRange[0];
                     float visibleMax = tmpVisibleRange[1];
-                    float visiblePad = stageW * 2.0f;
+                    float visiblePad = stageW * (revealCameraActive ? (2.0f / revealCullScale) : 2.0f);
 
                     int invisibleCount = 0;
                     for (int nIdx = line.loopStartIndex; nIdx < line.notes.size(); nIdx++) {
@@ -3054,7 +3285,12 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
                         Texture noteHoldTex = (note.morebets == 1) ? texHoldMh : texHold;
                         if (noteHoldTex != holdTex) continue;
 
-                        if (isBeforePrprAppearTime(note, t, appearBeforeBeats)) continue;
+                        boolean revealHiddenNote = revealHiddenObjects && st.hideNotes;
+                        boolean beforePrprAppear = isBeforePrprAppearTime(note, t, appearBeforeBeats);
+                        if (beforePrprAppear) {
+                            if (!revealHiddenObjects) continue;
+                            revealHiddenNote = true;
+                        }
 
                         double bpm = (line.bpm > 0) ? line.bpm : 120.0;
                         double speed = (note.useOfficialSpeed ? 1.0 : note.speed) * scrollSpeed;
@@ -3071,8 +3307,14 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
                         float signedLength = applyYControlScale((float) (note.holdLength * stageH * speedForHoldBody), yCtrl);
 
                         float noteAlpha = computeNoteRenderAlpha(note.alpha, lineAlphaRaw, note.isAbove, isOfficialFormat);
+                        if (normalizeNoteAlpha01(note.alpha) <= 0f || (lineAlphaRaw < 0f && noteAlpha <= 0f)) {
+                            if (revealHiddenObjects) revealHiddenNote = true;
+                        }
                         //: hold notes with speed === 0 are hidden
-                        if (note.isHold && note.speed == 0.0) noteAlpha = 0f;
+                        if (note.isHold && note.speed == 0.0) {
+                            noteAlpha = 0f;
+                            if (revealHiddenObjects) revealHiddenNote = true;
+                        }
                         noteAlpha *= frameGlobalAlpha;
                         if (note.judgeResult == JR_MISS) noteAlpha *= 0.5f;
                         
@@ -3087,20 +3329,33 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
                                  float bottomFp = Math.min(visualFp, visualFp + signedLength);
 
                                  if (note.isAbove) {
-                                     if (topFp < -0.001f) noteAlpha = 0f;
+                                     if (topFp < -0.001f) {
+                                         noteAlpha = 0f;
+                                         if (revealHiddenObjects) revealHiddenNote = true;
+                                     }
                                  } else {
-                                     if (bottomFp > 0.001f) noteAlpha = 0f;
+                                     if (bottomFp > 0.001f) {
+                                         noteAlpha = 0f;
+                                         if (revealHiddenObjects) revealHiddenNote = true;
+                                     }
                                  }
                              }
                         }
 
+                        float noteAlphaBeforeControl = noteAlpha;
                         noteAlpha *= line.calcNoteControl(baseFpPx, JudgeLine.NOTE_CTRL_ALPHA, 1f);
+                        if (noteAlphaBeforeControl > 0f && noteAlpha <= 0f && revealHiddenObjects) revealHiddenNote = true;
+                        float noteAlphaBeforeVisibleTime = noteAlpha;
                         noteAlpha = applyRpeVisibleTimeFade(note, t, noteAlpha);
+                        if (noteAlphaBeforeVisibleTime > 0f && noteAlpha <= 0f && revealHiddenObjects) revealHiddenNote = true;
                         boolean isHidden = (noteAlpha <= 0f);
 
                         if (isHidden) {
-                            invisibleCount = 0;
-                            continue;
+                            if (!revealHiddenNote) {
+                                invisibleCount = 0;
+                                continue;
+                            }
+                            noteAlpha = CHART_REVEAL_ALPHA * frameGlobalAlpha;
                         }
 
                         // Compute actual draw positions before visible-range culling
@@ -3148,15 +3403,24 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
                                 float topFp = Math.max(drawHeadFp, drawTailFp);
                                 float bottomFp = Math.min(drawHeadFp, drawTailFp);
                                 if (note.isAbove) {
-                                    if (topFp < -0.001f) noteAlpha = 0f;
+                                    if (topFp < -0.001f) {
+                                        noteAlpha = 0f;
+                                        if (revealHiddenObjects) revealHiddenNote = true;
+                                    }
                                 } else {
-                                    if (bottomFp > 0.001f) noteAlpha = 0f;
+                                    if (bottomFp > 0.001f) {
+                                        noteAlpha = 0f;
+                                        if (revealHiddenObjects) revealHiddenNote = true;
+                                    }
                                 }
                             }
                         }
                         if (noteAlpha <= 0f) {
-                            invisibleCount = 0;
-                            continue;
+                            if (!revealHiddenNote) {
+                                invisibleCount = 0;
+                                continue;
+                            }
+                            noteAlpha = CHART_REVEAL_ALPHA * frameGlobalAlpha;
                         }
 
                         float hMin = Math.min(drawHeadFp, drawTailFp);
@@ -3340,7 +3604,7 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
                     JudgeLine line = lines.get(lineDrawOrder[oi]);
                     if (line == null || line.attachUiElementId != 0) continue;
                     JudgeLine.StateHolder st = line.lastState;
-                    if (st == null || line.notes == null || st.hideNotes) continue;
+                    if (st == null || line.notes == null || (st.hideNotes && !revealHiddenObjects)) continue;
 
                     float lineRot = st.rotateDeg;
                     float lineX = stageL + st.xNorm * stageW;
@@ -3357,7 +3621,7 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
                     computeLineVisibleRange(st, tmpVisibleRange);
                     float visibleMin = tmpVisibleRange[0];
                     float visibleMax = tmpVisibleRange[1];
-                    float visiblePad = stageW * 2.0f;
+                    float visiblePad = stageW * (revealCameraActive ? (2.0f / revealCullScale) : 2.0f);
 
                     int invisibleCount = 0;
                     for (int nIdx = line.loopStartIndex; nIdx < line.notes.size(); nIdx++) {
@@ -3375,7 +3639,12 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
                         if (late > missFadeWin) continue;
                         if (note.isFake && note.sect <= t) continue;
 
-                        if (isBeforePrprAppearTime(note, t, appearBeforeBeats)) continue;
+                        boolean revealHiddenNote = revealHiddenObjects && st.hideNotes;
+                        boolean beforePrprAppear = isBeforePrprAppearTime(note, t, appearBeforeBeats);
+                        if (beforePrprAppear) {
+                            if (!revealHiddenObjects) continue;
+                            revealHiddenNote = true;
+                        }
 
                         double bpm = (line.bpm > 0) ? line.bpm : 120.0;
                         double speed = (note.isHold && note.useOfficialSpeed ? 1.0 : note.speed) * scrollSpeed;
@@ -3390,28 +3659,47 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
                         float visualFp = baseFpWithCtrl + transYPx;
 
                         if (isOfficialFormat && note.sect > t && visualFp < -0.001f) {
-                            invisibleCount = 0;
-                            continue;
+                            if (!revealHiddenObjects) {
+                                invisibleCount = 0;
+                                continue;
+                            }
+                            revealHiddenNote = true;
                         }
 
                         float noteAlpha = computeNoteRenderAlpha(note.alpha, lineAlphaRaw, note.isAbove, isOfficialFormat);
+                        if (normalizeNoteAlpha01(note.alpha) <= 0f || (lineAlphaRaw < 0f && noteAlpha <= 0f)) {
+                            if (revealHiddenObjects) revealHiddenNote = true;
+                        }
                         //: hold notes with speed === 0 are hidden
-                        if (note.isHold && note.speed == 0.0) noteAlpha = 0f;
+                        if (note.isHold && note.speed == 0.0) {
+                            noteAlpha = 0f;
+                            if (revealHiddenObjects) revealHiddenNote = true;
+                        }
                         noteAlpha *= frameGlobalAlpha;
                         
                         if (lineAlphaRaw < 0f && noteAlpha > 0f) {
                              int w = (int) Math.floor(-lineAlphaRaw);
                              if (w == 2) {
                                  if (note.isAbove) {
-                                     if (visualFp < -0.001f) noteAlpha = 0f;
+                                     if (visualFp < -0.001f) {
+                                         noteAlpha = 0f;
+                                         if (revealHiddenObjects) revealHiddenNote = true;
+                                     }
                                  } else {
-                                     if (visualFp > 0.001f) noteAlpha = 0f;
+                                     if (visualFp > 0.001f) {
+                                         noteAlpha = 0f;
+                                         if (revealHiddenObjects) revealHiddenNote = true;
+                                     }
                                  }
                              }
                         }
 
+                        float noteAlphaBeforeControl = noteAlpha;
                         noteAlpha *= line.calcNoteControl(baseFpPx, JudgeLine.NOTE_CTRL_ALPHA, 1f);
+                        if (noteAlphaBeforeControl > 0f && noteAlpha <= 0f && revealHiddenObjects) revealHiddenNote = true;
+                        float noteAlphaBeforeVisibleTime = noteAlpha;
                         noteAlpha = applyRpeVisibleTimeFade(note, t, noteAlpha);
+                        if (noteAlphaBeforeVisibleTime > 0f && noteAlpha <= 0f && revealHiddenObjects) revealHiddenNote = true;
                         if (!note.isHold && note.judgeResult < 0 && note.sect <= t) {
                             float p = (float) ((t - note.sect) / missFadeWin);
                             p = MathUtils.clamp(p, 0f, 1f);
@@ -3419,8 +3707,11 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
                         }
                         boolean isHidden = (noteAlpha <= 0f);
                         if (isHidden) {
-                            invisibleCount = 0;
-                            continue;
+                            if (!revealHiddenNote) {
+                                invisibleCount = 0;
+                                continue;
+                            }
+                            noteAlpha = CHART_REVEAL_ALPHA * frameGlobalAlpha;
                         }
 
                         if (visualFp < visibleMin - visiblePad || visualFp > visibleMax + visiblePad) {
@@ -3477,11 +3768,14 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
 
         
         // Replay uses recorded judge events to mirror manual hit effect timing.
-        if (autoplay && !replayPlayback) drawClickEffects(t);
-        drawBadEffects(t);
-        drawHitEffects(t);
+        boolean hideNonLineOutroElements = shouldHideNonLineStageElementsForOutroCollapse();
+        if (!hideNonLineOutroElements) {
+            if (autoplay && !replayPlayback) drawClickEffects(t);
+            drawBadEffects(t);
+            drawHitEffects(t);
+        }
 
-        if (showDebugInfo) drawDebugOverlay(t, lines);
+        if (showDebugInfo && !hideNonLineOutroElements) drawDebugOverlay(t, lines);
 
         if (needBars) {
             disableStageScissor();
@@ -3499,6 +3793,12 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
         final float stageAspect = (stageH > 1e-6f) ? (stageW / stageH) : (16f / 9f);
         final float rectSize = stageH * 0.005f;
         final float textSizePx = rectSize * 6f;
+        computeRevealWorldBounds(tmpRevealWorldBounds);
+        final float areaL = tmpRevealWorldBounds[0];
+        final float areaT = tmpRevealWorldBounds[1];
+        final float areaR = tmpRevealWorldBounds[2];
+        final float areaB = tmpRevealWorldBounds[3];
+        final boolean revealHiddenObjects = shouldRevealHiddenChartObjects();
 
         for (int oi = 0; oi < lineDrawOrder.length; oi++) {
             JudgeLine line = lines.get(lineDrawOrder[oi]);
@@ -3512,7 +3812,7 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
 
             // Violet rectangle + line ID label at line position
             if (isNoteRectInArea(lineX, lineY, rectSize, rectSize, 0f,
-                    stageL, stageT, stageL + stageW, stageT + stageH)) {
+                    areaL, areaT, areaR, areaB)) {
                 addQuadToBatch(lineX, lineY, rectSize * 4f, rectSize * 4f, 0f,
                         0.8f, 0.2f, 1.0f, 1f, 0f, 0f, 1f, 1f);
             }
@@ -3528,7 +3828,7 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
             }
 
             // Draw note positions on this line
-            if (line.notes == null || st.hideNotes) continue;
+            if (line.notes == null || (st.hideNotes && !revealHiddenObjects)) continue;
 
             double rad = lineRot * Math.PI / 180.0;
             float cosLine = (float) Math.cos(rad);
@@ -3574,7 +3874,7 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
                 float debugAlpha = isHidden ? 0.45f : 1f;
 
                 boolean onScreen = isNoteRectInArea(noteCx, noteCy, rectSize, rectSize, 0f,
-                        stageL, stageT, stageL + stageW, stageT + stageH);
+                        areaL, areaT, areaR, areaB);
                 if (onScreen) {
                     // Lime rectangle at note position
                     addQuadToBatch(noteCx, noteCy, rectSize * 6f, rectSize * 6f, 0f,
@@ -3885,8 +4185,9 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
         float b = st.colorB;
         float skinAlpha = 1f;
 
-        boolean hasTexture = (line.texture != null && !line.texture.isEmpty());
-        boolean hasText = (st.text != null && !st.text.isEmpty());
+        boolean hideNonLineElements = shouldHideNonLineStageElementsForOutroCollapse();
+        boolean hasTexture = !hideNonLineElements && line.texture != null && !line.texture.isEmpty();
+        boolean hasText = !hideNonLineElements && st.text != null && !st.text.isEmpty();
 
         // During intro/outro, always use AP/FC indicator color for plain lines
         // (no hits yet during intro; during outro we want the final indicator color)
@@ -3933,10 +4234,12 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
 
         // Determine line type (matches : text events take priority over texture).
         // In , lines with textEvents are always Text objects — texture is ignored.
-        boolean lineHasTextEvents = (line.judgeLineTextEvents != null && !line.judgeLineTextEvents.isEmpty());
+        boolean lineHasTextEvents = !hideNonLineElements
+                && line.judgeLineTextEvents != null
+                && !line.judgeLineTextEvents.isEmpty();
 
         // 1) Texture (only for lines WITHOUT text events)
-        if (!lineHasTextEvents && line.texture != null && !line.texture.isEmpty()) {
+        if (!lineHasTextEvents && hasTexture) {
             Texture t = getOrLoadFileTexture(line.texture);
             if (t != null && t.id != 0) {
                 float sx = st.scaleX;
@@ -4006,7 +4309,7 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
         }
 
         // 2) Text (renders on lines WITH textEvents, or any line with active text)
-        if (st.text != null && !st.text.isEmpty()) {
+        if (hasText) {
             Texture t = getOrCreateTextTexture(st.text);
             if (t != null && t.height > 0) {
                 // Match : fontSize=50 in a 1350-wide design space,
@@ -4214,6 +4517,9 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
         invalidateGl(hudTexCount1);
         invalidateGl(hudTexCount2);
         invalidateGl(hudTexCount3);
+        invalidateGl(hitOffsetTextTexture);
+        hitOffsetTextTexture = null;
+        hitOffsetTextTextureValue = null;
         // Clear countdown texture size tracking to force re-render
         hudCountTextSizePx = -1f;
     }
@@ -4900,6 +5206,13 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
             float rootY = stageT + stageH * 0.5f;
             y = rootY + (y - rootY) * rootScaleY;
             drawH *= rootScaleY;
+            if (isChartRevealCameraActive()) {
+                float revealScale = currentChartRevealScale();
+                x = chartRevealScreenX(x);
+                y = chartRevealScreenY(y);
+                drawW *= revealScale;
+                drawH *= revealScale;
+            }
 
             drawTextureAnchored(tex, x, y, drawW, drawH, rot + rotDeg,
                     r, g, b, a,
@@ -4910,6 +5223,13 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
         float rootY = stageT + stageH * 0.5f;
         y = rootY + (y - rootY) * rootScaleY;
         h *= rootScaleY;
+        if (isChartRevealCameraActive()) {
+            float revealScale = currentChartRevealScale();
+            x = chartRevealScreenX(x);
+            y = chartRevealScreenY(y);
+            w *= revealScale;
+            h *= revealScale;
+        }
         drawTextureAnchored(tex, x, y, w, h, rot, 1f, 1f, 1f, a,
                 0.5f, 0.5f, u0, v0, u1, v1);
     }
@@ -4975,7 +5295,7 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
     }
 
     private void drawGameHudWithAnimationsClipped() {
-        if (!isStageFullscreen()) {
+        if (!isChartRevealCameraActive() && !isStageFullscreen()) {
             enableStageScissor();
             drawGameHudWithAnimations();
             disableStageScissor();
@@ -5005,11 +5325,310 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
 
         // texts
         drawHudTexts(hudAlpha, hudRootScaleY, hudOutroT, chartTimeSec, stageAspect, lineScale);
+
+        drawHitOffsetIndicator(hudAlpha);
         
         // FPS counter (top-right corner, for debugging unlimited frame rate mode)
         if (showFps && currentFps > 0f) {
             drawFpsCounter(hudAlpha);
         }
+    }
+
+    private void drawHitOffsetIndicator(float hudAlpha) {
+        if (!hitOffsetIndicatorEnabled || texWhite == null) return;
+        if (autoplay && !replayPlayback) return;
+        if (viewW <= 0 || viewH <= 0) return;
+
+        double now = visualTimeSec;
+        hitOffsetIndicator.update(now);
+
+        float alpha = hudAlpha * 0.68f;
+        if (alpha <= 0.001f) return;
+
+        float meterW = MathUtils.clamp((float) viewW * 0.18f, dp(120f), dp(190f));
+        float radius = meterW * 0.5f;
+        float cx = (float) viewW * 0.5f;
+        float arcWidth = Math.max(dp(1.6f), meterW * 0.012f);
+        float maxAngleRad = (float) Math.toRadians(HitOffsetIndicator.MAX_ANGLE_DEG);
+        float endpointCos = (float) Math.cos(maxAngleRad);
+        float endpointSin = (float) Math.sin(maxAngleRad);
+        float lineW = radius * endpointSin * 2f;
+        // Keep the 60-degree dial shape; translate it down so the remaining
+        // bottom footprint is just the arc height plus icon/text safety.
+        float arcHeight = radius * (1f - endpointCos);
+        float arrowRadius = radius - dp(9f);
+
+        double perfect = getPerfectWindowSec();
+        double good = getGoodWindowSec();
+        double bad = Math.max(0.001, getBadWindowSec());
+        if (hitOffsetIndicatorMode == HIT_OFFSET_INDICATOR_LINE) {
+            float lineY = (float) viewH - hitOffsetLineBottomSafety(meterW);
+            drawHitOffsetLineIndicator(cx, lineY, lineW, arcWidth,
+                    perfect, good, bad, now, hudAlpha, alpha);
+            return;
+        }
+
+        float bottomSafety = hitOffsetBottomSafety(meterW, radius, arrowRadius, endpointCos);
+        float baseY = (float) viewH - arcHeight - bottomSafety + radius;
+        float perfectAngle = MathUtils.clamp((float) (perfect / bad) * HitOffsetIndicator.MAX_ANGLE_DEG,
+                0f, HitOffsetIndicator.MAX_ANGLE_DEG);
+        float goodAngle = MathUtils.clamp((float) (good / bad) * HitOffsetIndicator.MAX_ANGLE_DEG,
+                perfectAngle, HitOffsetIndicator.MAX_ANGLE_DEG);
+
+        drawHitOffsetArc(cx, baseY, radius, -HitOffsetIndicator.MAX_ANGLE_DEG, -goodAngle,
+                arcWidth, HIT_OFFSET_RED_R, HIT_OFFSET_RED_G, HIT_OFFSET_RED_B, alpha);
+        drawHitOffsetArc(cx, baseY, radius, -goodAngle, -perfectAngle,
+                arcWidth, HIT_OFFSET_YELLOW_R, HIT_OFFSET_YELLOW_G, HIT_OFFSET_YELLOW_B, alpha);
+        drawHitOffsetArc(cx, baseY, radius, -perfectAngle, perfectAngle,
+                arcWidth, HIT_OFFSET_GREEN_R, HIT_OFFSET_GREEN_G, HIT_OFFSET_GREEN_B, alpha);
+        drawHitOffsetArc(cx, baseY, radius, perfectAngle, goodAngle,
+                arcWidth, HIT_OFFSET_YELLOW_R, HIT_OFFSET_YELLOW_G, HIT_OFFSET_YELLOW_B, alpha);
+        drawHitOffsetArc(cx, baseY, radius, goodAngle, HitOffsetIndicator.MAX_ANGLE_DEG,
+                arcWidth, HIT_OFFSET_RED_R, HIT_OFFSET_RED_G, HIT_OFFSET_RED_B, alpha);
+
+        float tickInner = radius - dp(6f);
+        float tickOuter = radius + dp(6f);
+        drawHitOffsetRadialLine(cx, baseY, 0f, tickInner, tickOuter,
+                Math.max(dp(0.8f), meterW * 0.005f), 1f, 1f, 1f, alpha * 0.7f);
+
+        for (HitOffsetIndicator.Mark mark : hitOffsetIndicator.marks) {
+            if (!mark.active) continue;
+            float age = HitOffsetIndicator.markAge(now, mark);
+            if (age < 0f || age >= 1f) continue;
+            float markAlpha = HitOffsetIndicator.fadeOutAlpha(age) * hudAlpha;
+            if (markAlpha <= 0.001f) continue;
+            float[] color = hitOffsetColor(mark.judgement);
+            float inner = radius - dp(3f);
+            float outer = radius + dp(4f);
+            drawHitOffsetRadialLine(cx, baseY, mark.angleDeg, inner, outer,
+                    arcWidth * 2.5f, color[0], color[1], color[2], markAlpha * 0.16f);
+            drawHitOffsetRadialLine(cx, baseY, mark.angleDeg, inner, outer,
+                    arcWidth * 1.45f, color[0], color[1], color[2], markAlpha * 0.34f);
+            drawHitOffsetRadialLine(cx, baseY, mark.angleDeg, inner, outer,
+                    arcWidth * 0.7f, color[0], color[1], color[2], markAlpha * 0.9f);
+        }
+
+        drawHitOffsetArrow(cx, baseY, arrowRadius, hitOffsetIndicator.pointerAngleDeg, meterW, hudAlpha);
+        float sideY = hitOffsetPointY(baseY, HitOffsetIndicator.MAX_ANGLE_DEG, radius);
+        drawHitOffsetText(cx, sideY, meterW, now, hudAlpha);
+    }
+
+    private void drawHitOffsetLineIndicator(float cx,
+                                            float y,
+                                            float lineW,
+                                            float lineWidth,
+                                            double perfect,
+                                            double good,
+                                            double bad,
+                                            double now,
+                                            float hudAlpha,
+                                            float alpha) {
+        float half = lineW * 0.5f;
+        float perfectX = MathUtils.clamp((float) (perfect / bad) * half, 0f, half);
+        float goodX = MathUtils.clamp((float) (good / bad) * half, perfectX, half);
+
+        drawHitOffsetLine(cx - half, y, cx - goodX, y, lineWidth,
+                HIT_OFFSET_RED_R, HIT_OFFSET_RED_G, HIT_OFFSET_RED_B, alpha);
+        drawHitOffsetLine(cx - goodX, y, cx - perfectX, y, lineWidth,
+                HIT_OFFSET_YELLOW_R, HIT_OFFSET_YELLOW_G, HIT_OFFSET_YELLOW_B, alpha);
+        drawHitOffsetLine(cx - perfectX, y, cx + perfectX, y, lineWidth,
+                HIT_OFFSET_GREEN_R, HIT_OFFSET_GREEN_G, HIT_OFFSET_GREEN_B, alpha);
+        drawHitOffsetLine(cx + perfectX, y, cx + goodX, y, lineWidth,
+                HIT_OFFSET_YELLOW_R, HIT_OFFSET_YELLOW_G, HIT_OFFSET_YELLOW_B, alpha);
+        drawHitOffsetLine(cx + goodX, y, cx + half, y, lineWidth,
+                HIT_OFFSET_RED_R, HIT_OFFSET_RED_G, HIT_OFFSET_RED_B, alpha);
+
+        drawHitOffsetLine(cx, y - dp(4f), cx, y + dp(4f),
+                Math.max(dp(0.8f), lineWidth * 0.55f), 1f, 1f, 1f, alpha * 0.7f);
+
+        for (HitOffsetIndicator.Mark mark : hitOffsetIndicator.marks) {
+            if (!mark.active) continue;
+            float age = HitOffsetIndicator.markAge(now, mark);
+            if (age < 0f || age >= 1f) continue;
+            float markAlpha = HitOffsetIndicator.fadeOutAlpha(age) * hudAlpha;
+            if (markAlpha <= 0.001f) continue;
+            float[] color = hitOffsetColor(mark.judgement);
+            float x = hitOffsetLineX(cx, half, mark.angleDeg);
+            drawHitOffsetLine(x, y - dp(3f), x, y + dp(4f),
+                    lineWidth * 2.5f, color[0], color[1], color[2], markAlpha * 0.16f);
+            drawHitOffsetLine(x, y - dp(3f), x, y + dp(4f),
+                    lineWidth * 1.45f, color[0], color[1], color[2], markAlpha * 0.34f);
+            drawHitOffsetLine(x, y - dp(3f), x, y + dp(4f),
+                    lineWidth * 0.7f, color[0], color[1], color[2], markAlpha * 0.9f);
+        }
+
+        drawHitOffsetArrowLinear(cx, y, half, hitOffsetIndicator.pointerAngleDeg, lineW, hudAlpha);
+        drawHitOffsetText(cx, y - dp(12f), lineW, now, hudAlpha);
+    }
+
+    private float hitOffsetLineBottomSafety(float meterW) {
+        return hitOffsetArrowHeight(meterW) + dp(5f);
+    }
+
+    private float hitOffsetBottomSafety(float meterW, float radius, float arrowRadius, float endpointCos) {
+        float safety = dp(3f);
+        if (texHitOffsetArrow == null || texHitOffsetArrow.width <= 0 || texHitOffsetArrow.height <= 0) {
+            return safety;
+        }
+        float iconW = hitOffsetArrowWidth(meterW);
+        float iconH = hitOffsetArrowHeight(meterW);
+        float arrowBelowArc = endpointCos * Math.max(0f, radius - arrowRadius);
+        float arrowHalfBounds = 0.5f * (float) Math.hypot(iconW, iconH);
+        return Math.max(safety, arrowBelowArc + arrowHalfBounds + dp(2f));
+    }
+
+    private void drawHitOffsetArc(float cx,
+                                  float baseY,
+                                  float radius,
+                                  float startAngle,
+                                  float endAngle,
+                                  float width,
+                                  float r,
+                                  float g,
+                                  float b,
+                                  float a) {
+        if (endAngle <= startAngle || a <= 0f) return;
+        int steps = Math.max(3, (int) Math.ceil((endAngle - startAngle) / 2f));
+        float prevX = hitOffsetPointX(cx, startAngle, radius);
+        float prevY = hitOffsetPointY(baseY, startAngle, radius);
+        for (int i = 1; i <= steps; i++) {
+            float t = i / (float) steps;
+            float angle = startAngle + (endAngle - startAngle) * t;
+            float x = hitOffsetPointX(cx, angle, radius);
+            float y = hitOffsetPointY(baseY, angle, radius);
+            drawHitOffsetLine(prevX, prevY, x, y, width, r, g, b, a);
+            prevX = x;
+            prevY = y;
+        }
+    }
+
+    private void drawHitOffsetRadialLine(float cx,
+                                         float baseY,
+                                         float angleDeg,
+                                         float innerRadius,
+                                         float outerRadius,
+                                         float width,
+                                         float r,
+                                         float g,
+                                         float b,
+                                         float a) {
+        float x0 = hitOffsetPointX(cx, angleDeg, innerRadius);
+        float y0 = hitOffsetPointY(baseY, angleDeg, innerRadius);
+        float x1 = hitOffsetPointX(cx, angleDeg, outerRadius);
+        float y1 = hitOffsetPointY(baseY, angleDeg, outerRadius);
+        drawHitOffsetLine(x0, y0, x1, y1, width, r, g, b, a);
+    }
+
+    private void drawHitOffsetLine(float x0,
+                                   float y0,
+                                   float x1,
+                                   float y1,
+                                   float width,
+                                   float r,
+                                   float g,
+                                   float b,
+                                   float a) {
+        if (a <= 0f) return;
+        float aa = Math.max(1f, dp(0.45f));
+        drawLine(x0, y0, x1, y1, width + aa * 2f, r, g, b, a * 0.10f);
+        drawLine(x0, y0, x1, y1, width + aa, r, g, b, a * 0.18f);
+        drawLine(x0, y0, x1, y1, width, r, g, b, a * 0.88f);
+    }
+
+    private void drawHitOffsetArrowLinear(float cx,
+                                          float lineY,
+                                          float halfLineW,
+                                          float angleDeg,
+                                          float meterW,
+                                          float hudAlpha) {
+        if (texHitOffsetArrow == null || texHitOffsetArrow.width <= 0 || texHitOffsetArrow.height <= 0) return;
+        float iconW = hitOffsetArrowWidth(meterW);
+        float iconH = hitOffsetArrowHeight(meterW);
+        float x = hitOffsetLineX(cx, halfLineW, angleDeg);
+        float y = lineY + dp(3f) + iconH * 0.5f;
+        drawTextureCentered(texHitOffsetArrow, x, y, iconW, iconH, 0f,
+                1f, 1f, 1f, hudAlpha * 0.82f, 0f, 0f, 1f, 1f);
+    }
+
+    private void drawHitOffsetArrow(float cx,
+                                    float baseY,
+                                    float radius,
+                                    float angleDeg,
+                                    float meterW,
+                                    float hudAlpha) {
+        if (texHitOffsetArrow == null || texHitOffsetArrow.width <= 0 || texHitOffsetArrow.height <= 0) return;
+        float iconW = hitOffsetArrowWidth(meterW);
+        float iconH = hitOffsetArrowHeight(meterW);
+        float x = hitOffsetPointX(cx, angleDeg, radius);
+        float y = hitOffsetPointY(baseY, angleDeg, radius);
+        drawTextureCentered(texHitOffsetArrow, x, y, iconW, iconH, angleDeg,
+                1f, 1f, 1f, hudAlpha * 0.82f, 0f, 0f, 1f, 1f);
+    }
+
+    private float hitOffsetArrowWidth(float meterW) {
+        return MathUtils.clamp(meterW * 0.095f, dp(12f), dp(17f));
+    }
+
+    private float hitOffsetArrowHeight(float meterW) {
+        if (texHitOffsetArrow == null || texHitOffsetArrow.width <= 0 || texHitOffsetArrow.height <= 0) {
+            return hitOffsetArrowWidth(meterW);
+        }
+        return hitOffsetArrowWidth(meterW)
+                * texHitOffsetArrow.height
+                / Math.max(1f, (float) texHitOffsetArrow.width);
+    }
+
+    private void drawHitOffsetText(float cx, float y, float meterW, double now, float hudAlpha) {
+        float textAlpha = hitOffsetIndicator.latestTextAlpha(now) * hudAlpha * 0.85f;
+        String text = hitOffsetIndicator.latestText;
+        if (text == null || textAlpha <= 0.001f) return;
+        if (hitOffsetTextTexture == null
+                || hitOffsetTextTexture.id == 0
+                || hitOffsetTextTextureValue == null
+                || !hitOffsetTextTextureValue.equals(text)) {
+            deleteGlTexture(hitOffsetTextTexture);
+            float textSize = MathUtils.clamp(meterW * 0.075f, dp(9f), dp(13f));
+            hitOffsetTextTexture = createHudTextTexture(text, textSize, false, true, false, false);
+            hitOffsetTextTextureValue = text;
+        }
+        if (hitOffsetTextTexture == null || hitOffsetTextTexture.width <= 0 || hitOffsetTextTexture.height <= 0) {
+            return;
+        }
+        float[] color = hitOffsetColor(hitOffsetIndicator.latestJudgement);
+        drawTextureTopLeft(hitOffsetTextTexture,
+                cx - hitOffsetTextTexture.width * 0.5f,
+                y - hitOffsetTextTexture.height * 0.5f,
+                hitOffsetTextTexture.width,
+                hitOffsetTextTexture.height,
+                0f,
+                color[0], color[1], color[2], textAlpha,
+                0f, 0f, 1f, 1f);
+    }
+
+    private float[] hitOffsetColor(int judgement) {
+        switch (judgement) {
+            case JR_GOOD:
+                return HIT_OFFSET_YELLOW;
+            case JR_BAD:
+                return HIT_OFFSET_RED;
+            default:
+                return HIT_OFFSET_GREEN;
+        }
+    }
+
+    private static float hitOffsetPointX(float cx, float angleDeg, float radius) {
+        double rad = Math.toRadians(angleDeg);
+        return cx + (float) Math.sin(rad) * radius;
+    }
+
+    private static float hitOffsetPointY(float baseY, float angleDeg, float radius) {
+        double rad = Math.toRadians(angleDeg);
+        return baseY - (float) Math.cos(rad) * radius;
+    }
+
+    private static float hitOffsetLineX(float cx, float halfLineW, float angleDeg) {
+        float t = MathUtils.clamp(angleDeg / HitOffsetIndicator.MAX_ANGLE_DEG, -1f, 1f);
+        return cx + t * halfLineW;
     }
 
     private void drawPauseTouchRing(float pauseCx,
@@ -5057,9 +5676,8 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
         }
         
         if (hudTexFps != null) {
-            float margin = dp(8f);
-            float x = stageL + (stageW - hudTexFps.width) / 2f;
-            float y = stageT + stageH - margin - hudTexFps.height;
+            float x = dp(4f);
+            float y = Math.max(dp(2f), (float) viewH - dp(2f) - hudTexFps.height);
             
             // Semi-transparent background for readability
             drawSolidRect(x - dp(4f), y - dp(2f), 
@@ -5319,7 +5937,6 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
     private void updateGameplay(double tChart) {
         frameChartTimeSec = tChart;
         framePlayTimeSec = getSmoothedPlayheadSeconds();
-        updateReplayClockReference(tChart);
         if (replayPlayback && replayPlaybackData != null) {
             updateReplayPlayback(tChart);
         } else if (autoplay) {
@@ -5331,27 +5948,11 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
             }
         }
         startedTouchIds.clear();
-        firstTouchChartTimeSec = Double.NaN;
-    }
-
-    private void updateReplayClockReference(double tChart) {
-        if (!replayRecording) return;
-        replayClockRefChartTimeSec = tChart;
-        replayClockRefUptimeMs = SystemClock.uptimeMillis();
     }
 
     private double replayRecordNowChartTimeSec() {
         if (Double.isFinite(frameChartTimeSec)) return frameChartTimeSec;
         return getSmoothedPlayheadSeconds() - chart.offset - userOffsetSec;
-    }
-
-    private double eventChartTimeSec(long eventTimeMs) {
-        if (Double.isFinite(replayClockRefChartTimeSec) && replayClockRefUptimeMs > 0L) {
-            double dt = (eventTimeMs - replayClockRefUptimeMs) * 0.001 * Math.max(0.001f, musicSpeed);
-            double out = replayClockRefChartTimeSec + dt;
-            if (Double.isFinite(out)) return out;
-        }
-        return replayRecordNowChartTimeSec();
     }
 
     private void activateHoldAfterHead(@NonNull Note n, boolean perfect, double triggerTimeSec, double diffSec) {
@@ -5366,6 +5967,8 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
         n.clicked = true;
         n.holdTapTimeMs = System.nanoTime() / 1_000_000L;
         n.holdBroken = false;
+
+        recordHitOffsetIndicator(n, perfect ? JR_PERFECT : JR_GOOD, diffSec, true);
 
         // Official HoldControl.NoteMove keeps producing body effects after the
         // head hit. HoldControl.Judge only handles the later score settlement.
@@ -5464,9 +6067,7 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
             re.t = ReplayData.TYPE_HOLD_PRESS;
             re.ni = i;
             re.j = n.holdPerfect ? 0 : 1; // PERFECT or GOOD
-            re.ts = Double.isFinite(firstTouchChartTimeSec)
-                    ? firstTouchChartTimeSec
-                    : replayRecordNowChartTimeSec();
+            re.ts = chartTimeForJudgementDiff(n, n.holdDiffSec);
             replayRecorderData.entries.add(re);
         }
     }
@@ -5484,7 +6085,7 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
                         if (n.type == GameConstants.NOTE_HOLD) {
                             if (re.t == ReplayData.TYPE_HOLD_PRESS) {
                                 if (!n.holdActive && isHitJudgement(re.j)) {
-                                    activateHoldAfterHead(n, re.j == 0, re.ts, re.ts - n.sect);
+                                    activateHoldAfterHead(n, re.j == 0, re.ts, n.sect - re.ts);
                                     NativeAudioEngine.triggerSfx(GameConstants.NOTE_TAP);
                                     if (re.j == 0) {
                                         spawnHoldHeadHitEffect(n, re.ts, skinPColor[0], skinPColor[1], skinPColor[2], skinPAlpha, 4);
@@ -5502,11 +6103,11 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
                                 } else {
                                     n.holdActive = false;
                                     n.holdPreJudge = false;
-                                    commitJudgement(n, re.j, re.ts - n.sect);
+                                    commitJudgement(n, re.j, n.sect - re.ts);
                                 }
                             }
                         } else {
-                            commitJudgement(n, re.j, re.ts - n.sect);
+                            commitJudgement(n, re.j, n.sect - re.ts);
                         }
                     }
                 }
@@ -5938,7 +6539,7 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
                                 pe.t = ReplayData.TYPE_HOLD_PRESS;
                                 pe.ni = idx;
                                 pe.j = JR_PERFECT;
-                                pe.ts = Double.isFinite(firstTouchChartTimeSec) ? firstTouchChartTimeSec : replayRecordNowChartTimeSec();
+                                pe.ts = chartTimeForJudgementDiff(note, deltaTime);
                                 replayRecorderData.entries.add(pe);
                             }
                         }
@@ -5964,7 +6565,7 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
                                 pe.t = ReplayData.TYPE_HOLD_PRESS;
                                 pe.ni = idx;
                                 pe.j = JR_GOOD;
-                                pe.ts = Double.isFinite(firstTouchChartTimeSec) ? firstTouchChartTimeSec : replayRecordNowChartTimeSec();
+                                pe.ts = chartTimeForJudgementDiff(note, deltaTime);
                                 replayRecorderData.entries.add(pe);
                             }
                         }
@@ -6998,17 +7599,20 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
         float cos = (float) Math.cos(rad);
         float sin = (float) Math.sin(rad);
 
-        // Stage corners (TL, TR, BL, BR)
-        // Note: Stage rect is (stageL, stageT, stageL+stageW, stageT+stageH)
+        // Stage corners (TL, TR, BL, BR). In reveal mode this is the
+        // inverse-transformed screen viewport, matching the pulled-back camera.
+        computeRevealWorldBounds(tmpRevealWorldBounds);
+
         // Relative to line center (lineX, lineY)
-        float l = stageL - lineX;
-        float r = (stageL + stageW) - lineX;
-        float t = stageT - lineY;
-        float b = (stageT + stageH) - lineY;
+        float l = tmpRevealWorldBounds[0] - lineX;
+        float r = tmpRevealWorldBounds[2] - lineX;
+        float t = tmpRevealWorldBounds[1] - lineY;
+        float b = tmpRevealWorldBounds[3] - lineY;
 
         // Expand stage area slightly (1/12 margin as per isNoteRectInArea) to be safe
-        float marginW = stageW / 12f;
-        float marginH = stageH / 12f;
+        float revealScale = currentChartRevealScale();
+        float marginW = isChartRevealCameraActive() ? stageW / revealScale / 12f : stageW / 12f;
+        float marginH = isChartRevealCameraActive() ? stageH / revealScale / 12f : stageH / 12f;
         l -= marginW;
         r += marginW;
         t -= marginH;
@@ -8524,7 +9128,6 @@ private float[] evaluatePrprVarValue(PrprEffect.PrprVar var,
 
     /**
      * prpr effect vertex shader.
-     * <p>
      * Preset/custom prpr fragment shaders expect a varying named <code>uv</code>
      * and sample a uniform named <code>screenTexture</code>.
      */

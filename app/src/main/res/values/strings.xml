@@ -59,8 +59,13 @@
     <string name="setting_antialias">抗锯齿</string>
     <string name="setting_show_fps">显示 FPS</string>
     <string name="setting_show_debug">显示调试信息</string>
+    <string name="setting_chart_reveal">谱面揭秘</string>
     <string name="setting_multi_highlight">多押高亮提示</string>
     <string name="setting_apfc_indicator">AP / FC 指示器</string>
+    <string name="setting_hit_offset_indicator">判定偏移指示器</string>
+    <string name="option_hit_offset_disabled">禁用</string>
+    <string name="option_hit_offset_sector">扇形</string>
+    <string name="option_hit_offset_line">横线</string>
 
     <string name="section_music_volume">音乐音量</string>
     <string name="section_sfx_volume">打击音效音量</string>
